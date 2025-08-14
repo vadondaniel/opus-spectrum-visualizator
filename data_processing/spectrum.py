@@ -7,15 +7,6 @@ import re
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-
-def natural_sort_key(s):
-    """
-    Key function for natural sorting.
-    Splits text into digit and non-digit chunks for proper numeric order.
-    """
-    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]
-
-
 def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
     """
     Processes spectrum data from OPUS files in a specified folder.
@@ -124,7 +115,6 @@ def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
 
     return result_data
 
-
 def interpolate_spectrum_data(spectrum_data, progress_callback=None):
     """
     Interpolates spectrum data to a common wavenumber range.
@@ -196,3 +186,10 @@ def interpolate_spectrum_data(spectrum_data, progress_callback=None):
         print("Interpolation complete.")
 
     return interpolated_data
+
+def natural_sort_key(s):
+    """
+    Key function for natural sorting.
+    Splits text into digit and non-digit chunks for proper numeric order.
+    """
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]

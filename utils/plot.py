@@ -80,7 +80,6 @@ def plot_spectra(
     plt.tight_layout()
     plt.show()
 
-
 def plot_temperature(
         temperature_data,
         start_index=0, end_index=None,
@@ -189,7 +188,6 @@ def plot_temperature(
     plt.tight_layout()
     plt.show()
 
-
 def plot_3d_surface(combined_data, cmap='plasma'):
     """
     Plot a 3D surface: Wavenumber (X) vs Temperature (Y) vs Absorbance (Z)
@@ -219,11 +217,6 @@ def plot_3d_surface(combined_data, cmap='plasma'):
     fig.colorbar(surf, shrink=0.5, aspect=10)
     plt.tight_layout()
     plt.show()
-
-
-def moving_average(data, window_size):
-    """Calculate the moving average of the data."""
-    return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
 
 def plot_absorption_vs_temperature(
     combined_list,
@@ -278,3 +271,7 @@ def plot_absorption_vs_temperature(
     plt.legend()
     plt.tight_layout()
     plt.show()
+
+def moving_average(data, window_size):
+    """Calculate the moving average of the data."""
+    return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
