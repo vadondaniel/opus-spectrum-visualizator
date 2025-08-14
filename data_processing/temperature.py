@@ -5,15 +5,30 @@ import pandas as pd
 
 def process_temperature_data(folder_path, progress_callback=None, num_chunks=100):
     """
-    Ultra-fast temperature data loader with periodic progress updates.
+    Processes temperature data from a specified file in a folder.
 
-    Args:
-        folder_path (Path): Directory containing the temperature file.
-        progress_callback (callable, optional): For GUI progress updates.
-        num_chunks (int): Number of chunks to split the data into for progress updates.
+    This function scans a given folder for a temperature data file, reads the relevant columns (timestamp and temperature),
+    and processes the data in chunks. The processing can report progress through a callback function.
+
+    Parameters:
+    folder_path (str or Path): The path to the folder containing the temperature data file.
+    progress_callback (function, optional): A callback function that takes a string message as an argument.
+        This function can be used to report progress during the data processing. If not provided,
+        progress messages will be printed to the console.
+    num_chunks (int, optional): The number of chunks to divide the data into for processing. Default is 100.
 
     Returns:
-        list of dicts: Each dict contains 'file_path', 'timestamp', and 'temperature'.
+    list: A list of dictionaries containing the processed temperature data, where each dictionary has:
+        - "file_path": The path to the processed file.
+        - "timestamp": The Unix timestamp value from the data.
+        - "temperature": The temperature value corresponding to the timestamp. (in Kelvin)
+
+    Raises:
+    ValueError: If the specified folder does not contain exactly one temperature file.
+
+    Example:
+    >>> folder_path = "/path/to/temperature/data"
+    >>> temperature_data = process_temperature_data(folder_path)
     """
     file_paths = list(Path(folder_path).rglob("*.*"))
     if len(file_paths) != 1:
@@ -51,15 +66,28 @@ def process_temperature_data(folder_path, progress_callback=None, num_chunks=100
 
 def interpolate_to_round_seconds(temperature_data):
     """
-    Interpolate temperature data to round seconds.
-    
+    Interpolates temperature data to round second timestamps.
+
+    This function takes a list of temperature data entries, each containing a Unix timestamp and a temperature value
+    in Kelvin, and interpolates the temperatures to round second intervals between the minimum and maximum timestamps.
+
     Parameters:
-        temperature_data (List[dict]): 
-            A list of dictionaries containing temperature data. Each dictionary should have the keys 
-            "timestamp" (Unix timestamp) and "temperature" (temperature value in Kelvin).
-    
+    temperature_data (list): A list of dictionaries, where each dictionary contains:
+        - "timestamp": The Unix timestamp value.
+        - "temperature": The temperature value in Kelvin corresponding to the timestamp.
+
     Returns:
-        List[dict]: A list of dictionaries with interpolated temperature data at each second.
+    list: A list of dictionaries containing the interpolated temperature data, where each dictionary has:
+        - "timestamp": The rounded Unix timestamp.
+        - "temperature": The interpolated temperature value in Kelvin corresponding to the rounded timestamp.
+
+    Example:
+    >>> temperature_data = [
+    ...     {"timestamp": 1609459200, "temperature": 293.15},  # Jan 1, 2021, 00:00:00 UTC
+    ...     {"timestamp": 1609459260, "temperature": 294.15},  # Jan 1, 2021, 00:01:00 UTC
+    ...     {"timestamp": 1609459320, "temperature": 295.15}   # Jan 1, 2021, 00:02:00 UTC
+    ... ]
+    >>> interpolated_data = interpolate_to_round_seconds(temperature_data)
     """
     if not temperature_data:
         return []
