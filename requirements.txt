@@ -1,0 +1,6 @@
+PyQt6
+matplotlib
+numpy
+pandas
+spectrochempy
+tqdm
