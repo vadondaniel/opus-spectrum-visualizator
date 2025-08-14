@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""
-Full-screen PyQt6 wizard for Spectrum -> Temperature -> Combine
-- Live percentage progress bars (uses progress_callback)
-- Plot buttons with settings
-- Temperature step locked until spectrum processing finishes
-- Automatically combines data when entering step 3
-- Call `launch_app()` to run
-"""
-
 import sys
 import os
 from datetime import datetime
