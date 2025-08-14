@@ -12,14 +12,7 @@ def plot_spectra(
         spectra_data: List of dicts from process_spectrum_data_with_interpolation().
         start_index: First spectrum index to plot.
         end_index: Last spectrum index to plot (inclusive). Use -1 or None to plot all from start_index.
-        title: Plot title.
-        xlabel: X-axis label.
-        ylabel: Y-axis label.
-        invert_xaxis: If True, invert X-axis (IR convention).
         normalize: If True, normalize each spectrum to its max(abs).
-        figsize: Figure size as (width, height).
-        alpha: Line transparency.
-        legend: Show legend with spectrum number.
         progress_callback: Optional function to report progress.
         index_offset: If True, use 1-based indexing for start_index and end_index.
     """
@@ -101,24 +94,6 @@ def plot_temperature(
         temperature_data (List[dict]): 
             A list of dictionaries containing temperature data. Each dictionary should have the keys 
             "timestamp" (Unix timestamp) and "temperature" (temperature value in Kelvin).
-
-        title (str): 
-            The title of the plot. Default is 'Temperature Over Time'.
-
-        xlabel (str): 
-            The label for the x-axis. Default is 'Time'.
-
-        ylabel (str): 
-            The label for the y-axis. Default is 'Temperature (K)'.
-
-        marker (str): 
-            The marker style for the data points (e.g., '.', 'o', 's'). Default is '.'.
-
-        linestyle (str): 
-            The line style for the plot (e.g., '-', '--', ':'). Default is '-'.
-
-        figsize (tuple): 
-            The size of the figure in inches (width, height). Default is (12, 6).
 
         start_index (int): 
             The index to start plotting from. Default is 0.
@@ -252,16 +227,8 @@ def moving_average(data, window_size):
 
 def plot_absorption_vs_temperature(
     combined_list,
-    start_wavelength,
-    end_wavelength,
-    smooth=False,
-    window_size=5,
-    figsize=(10, 6),
-    marker='o',
-    linestyle='-',
-    smooth_color='red',
-    raw_color='blue',
-    title="Absorption vs Temperature"
+    start_wavelength, end_wavelength,
+    smooth=False, window_size=5,
 ):
     """
     Plot summed absorbance vs temperature with optional moving average smoothing.
@@ -272,12 +239,6 @@ def plot_absorption_vs_temperature(
         end_wavelength (float): End of wavelength range.
         smooth (bool): If True, overlay smoothed data.
         window_size (int): Moving average window size for smoothing (in number of points).
-        figsize (tuple): Figure size.
-        marker (str): Marker style for the raw plot.
-        linestyle (str): Line style for the raw plot.
-        smooth_color (str): Color for smoothed curve.
-        raw_color (str): Color for raw curve.
-        title (str): Plot title.
     """
     if not combined_list:
         raise ValueError("No combined data to plot.")
@@ -296,8 +257,8 @@ def plot_absorption_vs_temperature(
     summed_absorbance = summed_absorbance[sort_idx]
 
     # Plot raw data
-    plt.figure(figsize=figsize)
-    plt.plot(temperatures, summed_absorbance, marker=marker, linestyle=linestyle, color=raw_color, label="Raw")
+    plt.figure(figsize=(10, 6))
+    plt.plot(temperatures, summed_absorbance, marker='o', linestyle='-', color='blue', label="Raw")
 
     if smooth:
         smoothed_abs = np.zeros_like(summed_absorbance, dtype=float)
@@ -308,11 +269,11 @@ def plot_absorption_vs_temperature(
             smoothed_abs[i] = np.mean(summed_absorbance[mask])
 
         # Overlay smoothed curve
-        plt.plot(temperatures, smoothed_abs, marker='', linestyle='-', color=smooth_color, linewidth=2, label="Smoothed")
+        plt.plot(temperatures, smoothed_abs, marker='', linestyle='-', color='red', linewidth=2, label="Smoothed")
 
     plt.xlabel("Temperature (K)")
     plt.ylabel(f"Summed Absorbance ({start_wavelength}-{end_wavelength})")
-    plt.title(title)
+    plt.title("Absorption vs Temperature")
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
