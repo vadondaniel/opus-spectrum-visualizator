@@ -210,7 +210,9 @@ class WizardMainWindow(QMainWindow):
         if not folder:
             QMessageBox.warning(self, "No folder", "Please select a spectrum folder first.")
             return
-
+        
+        # Clear previous data
+        self.spec_table.setRowCount(0)
         self.btn_next_1.setEnabled(False)
         self.spec_general_label.setVisible(False)
         self.spec_progress.setVisible(True)
@@ -227,67 +229,71 @@ class WizardMainWindow(QMainWindow):
 
     def _on_spectrum_done(self, result_list):
         self.spec_process_btn.setEnabled(True)
-        self.spectrum_list = result_list or []
+        self.spectrum_list = sorted(result_list or [], key=lambda e: e.get("timestamp", 0))
         if not self.spectrum_list:
             QMessageBox.warning(self, "Spectrum", "No spectrum data processed.")
             self.btn_next_1.setEnabled(False)
             return
 
-        # populate table
-        self.spec_table.setRowCount(len(self.spectrum_list))
-        abs_min_vals, abs_max_vals = [], []
+        row_count = len(self.spectrum_list)
+        self.spec_table.setRowCount(row_count)
+
+        abs_min_vals = []
+        abs_max_vals = []
+        wn_min_vals = []
+        wn_max_vals = []
         timestamps = []
 
         for i, entry in enumerate(self.spectrum_list):
+            # File name
             file_name = os.path.basename(entry.get("file_path", ""))
+
+            # Timestamp / datetime
             dt = entry.get("datetime") or entry.get("timestamp") or ""
-            try:
-                arr = np.array(entry.get("absorbance", []))
-                if arr.size:
-                    abs_min_vals.append(arr.min())
-                    abs_max_vals.append(arr.max())
-                abs_text = f"{arr.min():.4f}–{arr.max():.4f}" if arr.size else ""
-            except Exception:
+            if isinstance(entry.get("timestamp"), (int, float)):
+                timestamps.append(entry["timestamp"])
+
+            # Absorbance
+            arr = np.asarray(entry.get("absorbance", []))
+            if arr.size:
+                a_min = arr.min()
+                a_max = arr.max()
+                abs_min_vals.append(a_min)
+                abs_max_vals.append(a_max)
+                abs_text = f"{a_min:.4f}–{a_max:.4f}"
+            else:
                 abs_text = ""
+
+            # Wavenumbers
+            wn_array = np.asarray(entry.get("wavenumbers", []))
+            if wn_array.size:
+                wn_min_vals.append(wn_array.min())
+                wn_max_vals.append(wn_array.max())
+
+            # Populate table row
             self.spec_table.setItem(i, 0, QTableWidgetItem(file_name))
             self.spec_table.setItem(i, 1, QTableWidgetItem(str(dt)))
             self.spec_table.setItem(i, 2, QTableWidgetItem(abs_text))
 
-            if isinstance(entry.get("timestamp"), (int, float)):
-                timestamps.append(entry["timestamp"])
-
         self.spec_table.resizeColumnsToContents()
         self.btn_next_1.setEnabled(True)
 
-        # unlock temperature processing if folder already chosen
-        if hasattr(self, 'temp_folder_text') and self.temp_folder_text:
+        # Unlock temperature processing if folder chosen
+        if getattr(self, 'temp_folder_text', None):
             try:
                 self.temp_process_btn.setEnabled(True)
             except Exception:
                 pass
 
-        # ----- Summary label -----
-        if abs_min_vals and abs_max_vals and timestamps:
+        # Summary label
+        if abs_min_vals and abs_max_vals and wn_min_vals and wn_max_vals and timestamps:
             spec_min = min(abs_min_vals)
             spec_max = max(abs_max_vals)
-
-            # Wavenumber range
-            wn_min_vals, wn_max_vals = [], []
-            for entry in self.spectrum_list:
-                wn_array = np.array(entry.get("wavenumbers", []))
-                if wn_array.size:
-                    wn_min_vals.append(wn_array.min())
-                    wn_max_vals.append(wn_array.max())
-            if wn_min_vals and wn_max_vals:
-                wn_min = min(wn_min_vals)
-                wn_max = max(wn_max_vals)
-
-            first_time_point = datetime.fromtimestamp(min(timestamps)).strftime('%Y-%m-%d %H:%M:%S')
-            last_time_point = datetime.fromtimestamp(max(timestamps)).strftime('%Y-%m-%d %H:%M:%S')
+            wn_min = min(wn_min_vals)
+            wn_max = max(wn_max_vals)
 
             general_data = (
-                f"Number of Files: {len(self.spectrum_list)} | "
-                #f"Time Range: {first_time_point} - {last_time_point}\n"
+                f"Number of Files: {row_count} | "
                 f"Abs Range: {spec_min:.4f}–{spec_max:.4f} | "
                 f"Wavenumber Range: {wn_min:.2f}–{wn_max:.2f} cm⁻¹"
             )
@@ -408,6 +414,7 @@ class WizardMainWindow(QMainWindow):
 
         # Clear previous data
         self.temp_table.setRowCount(0)
+        self.btn_next_2.setEnabled(False)
         self.temp_progress.setValue(0)
         self.temp_progress.setVisible(True)
         self.temp_general_label.setVisible(False)
@@ -430,58 +437,62 @@ class WizardMainWindow(QMainWindow):
             QMessageBox.warning(self, "Temperature", "No temperature data processed.")
             self.btn_next_2.setEnabled(False)
             return
-
-        # Filter to spectrum timeframe to limit points (performance)
+        # Filter to spectrum timeframe (single pass)
         if self.spectrum_list:
-            first_spec = self.spectrum_list[0]["timestamp"]
-            last_spec = self.spectrum_list[-1]["timestamp"]
-            times = [e["timestamp"] for e in self.temperature_list_raw]
-            idx_before = max((i for i, t in enumerate(times) if t <= first_spec), default=None)
-            idx_after = min((i for i, t in enumerate(times) if t >= last_spec), default=None)
+            first_spec_ts = self.spectrum_list[0]["timestamp"]
+            last_spec_ts = self.spectrum_list[-1]["timestamp"]
 
-            filtered = []
-            if idx_before is not None:
-                filtered.append(self.temperature_list_raw[idx_before])
-            if idx_before is not None and idx_after is not None and idx_after > idx_before:
-                filtered.extend(self.temperature_list_raw[idx_before + 1:idx_after])
-            if idx_after is not None and idx_after != idx_before:
-                filtered.append(self.temperature_list_raw[idx_after])
+            idx_before = idx_after = None
+            for i, entry in enumerate(self.temperature_list_raw):
+                ts = entry["timestamp"]
+                if ts <= first_spec_ts:
+                    idx_before = i
+                if idx_after is None and ts >= last_spec_ts:
+                    idx_after = i
+                    break  # stop early once last is found
 
-            self.temperature_list_filtered = filtered if filtered else self.temperature_list_raw
+            if idx_before is not None and idx_after is not None and idx_after >= idx_before:
+                self.temperature_list_filtered = (
+                    [self.temperature_list_raw[idx_before]]
+                    + self.temperature_list_raw[idx_before + 1:idx_after]
+                    + ([self.temperature_list_raw[idx_after]] if idx_after != idx_before else [])
+                )
+            else:
+                self.temperature_list_filtered = self.temperature_list_raw
         else:
             self.temperature_list_filtered = self.temperature_list_raw
 
-        # Populate table
-        self.temp_table.setRowCount(len(self.temperature_list_filtered))
-        for i, e in enumerate(self.temperature_list_filtered):
-            ts = e.get("timestamp")
-            dt = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S') if ts else "Not Available"
-            temp = e.get("temperature", "")
-            self.temp_table.setItem(i, 0, QTableWidgetItem(str(dt)))
-            self.temp_table.setItem(i, 1, QTableWidgetItem(f"{temp:.4f}" if isinstance(temp, (int, float)) else str(temp)))
+        # Populate table + compute min/max in one pass
+        row_count = len(self.temperature_list_filtered)
+        self.temp_table.setRowCount(row_count)
 
-        # Auto-size the table columns
+        min_temp = float("inf")
+        max_temp = float("-inf")
+
+        for i, entry in enumerate(self.temperature_list_filtered):
+            ts = entry.get("timestamp")
+            dt_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S') if ts else "Not Available"
+            temp = entry.get("temperature", "")
+
+            if isinstance(temp, (int, float)):
+                min_temp = min(min_temp, temp)
+                max_temp = max(max_temp, temp)
+                temp_str = f"{temp:.4f}"
+            else:
+                temp_str = str(temp)
+
+            self.temp_table.setItem(i, 0, QTableWidgetItem(dt_str))
+            self.temp_table.setItem(i, 1, QTableWidgetItem(temp_str))
+
         self.temp_table.resizeColumnsToContents()
 
-        # Calculate and display general data
-        if self.temperature_list_filtered:
-            min_temp = min(e["temperature"] for e in self.temperature_list_filtered if "temperature" in e)
-            max_temp = max(e["temperature"] for e in self.temperature_list_filtered if "temperature" in e)
-
-            # Get the first and last timestamps for the general data
-            first_time_point = datetime.fromtimestamp(self.temperature_list_filtered[0]["timestamp"]).strftime('%Y-%m-%d %H:%M:%S') if "timestamp" in self.temperature_list_filtered[0] else "Not Available"
-            last_time_point = datetime.fromtimestamp(self.temperature_list_filtered[-1]["timestamp"]).strftime('%Y-%m-%d %H:%M:%S') if "timestamp" in self.temperature_list_filtered[-1] else "Not Available"
-
-            # Display general data
-            general_data = (
-                #f"Time Range: {first_time_point} - {last_time_point} | "
-                f"Min Temp: {min_temp:.4f} K | Max Temp: {max_temp:.4f} K"
-            )
-            
-            self.temp_progress.setVisible(False)
+        # Display general data
+        if min_temp != float("inf"):
+            general_data = f"Min Temp: {min_temp:.4f} K | Max Temp: {max_temp:.4f} K"
             self.temp_general_label.setText(general_data)
             self.temp_general_label.setVisible(True)
 
+        self.temp_progress.setVisible(False)
         self.btn_next_2.setEnabled(True)
 
     # ----------------------- Combined Page -----------------------
@@ -575,12 +586,11 @@ class WizardMainWindow(QMainWindow):
             return
 
         try:
-            combined = combine_temperature_and_spectrum_data(
+            self.combined_list = combine_temperature_and_spectrum_data(
                 self.temperature_list_filtered,
                 self.spectrum_list,
                 time_buffer=10
-            )
-            self.combined_list = combined or []
+            ) or []
         except Exception as e:
             QMessageBox.critical(self, "Combine error", str(e))
             self.combined_list = []
@@ -591,67 +601,64 @@ class WizardMainWindow(QMainWindow):
             self.combined_summary_label.setText("No combined data available.")
             return
 
-        # Populate table and collect stats
-        self.combined_table.setRowCount(len(self.combined_list))
-        abs_min_vals, abs_max_vals = [], []
-        temp_min_vals, temp_max_vals = [], []
+        row_count = len(self.combined_list)
+        self.combined_table.setRowCount(row_count)
+
+        # Running min/max trackers
+        abs_min = float("inf")
+        abs_max = float("-inf")
+        temp_min = float("inf")
+        temp_max = float("-inf")
+        wn_min = float("inf")
+        wn_max = float("-inf")
         timestamps = []
 
+        # Single pass: fill table + compute all stats
         for i, c in enumerate(self.combined_list):
             dt = c.get("datetime") or c.get("timestamp") or ""
             temp = c.get("temperature", "")
-            try:
-                arr = np.array(c.get("absorbance", []))
-                if arr.size:
-                    abs_min_vals.append(arr.min())
-                    abs_max_vals.append(arr.max())
-                abs_text = f"{arr.min():.4f}–{arr.max():.4f}" if arr.size else ""
-            except Exception:
-                abs_text = ""
-            self.combined_table.setItem(i, 0, QTableWidgetItem(str(dt)))
-            self.combined_table.setItem(i, 1, QTableWidgetItem(f"{temp:.4f}" if isinstance(temp, (int, float)) else str(temp)))
-            self.combined_table.setItem(i, 2, QTableWidgetItem(abs_text))
 
+            # Absorbance
+            arr = np.asarray(c.get("absorbance", []))
+            if arr.size:
+                a_min = arr.min()
+                a_max = arr.max()
+                abs_min = min(abs_min, a_min)
+                abs_max = max(abs_max, a_max)
+                abs_text = f"{a_min:.4f}–{a_max:.4f}"
+            else:
+                abs_text = ""
+
+            # Temperature
             if isinstance(temp, (int, float)):
-                temp_min_vals.append(temp)
-                temp_max_vals.append(temp)
+                temp_min = min(temp_min, temp)
+                temp_max = max(temp_max, temp)
+
+            # Wavenumbers
+            wn_array = np.asarray(c.get("wavenumbers", []))
+            if wn_array.size:
+                wn_min = min(wn_min, wn_array.min())
+                wn_max = max(wn_max, wn_array.max())
+
+            # Timestamps
             if isinstance(c.get("timestamp"), (int, float)):
                 timestamps.append(c["timestamp"])
+
+            # Table row
+            self.combined_table.setItem(i, 0, QTableWidgetItem(str(dt)))
+            self.combined_table.setItem(
+                i, 1, QTableWidgetItem(f"{temp:.4f}" if isinstance(temp, (int, float)) else str(temp))
+            )
+            self.combined_table.setItem(i, 2, QTableWidgetItem(abs_text))
 
         self.combined_table.resizeColumnsToContents()
         self.combined_table.horizontalHeader().setStretchLastSection(True)
 
-        # Wavenumber range
-        if self.spectrum_list:
-            wn_min_vals, wn_max_vals = [], []
-            for spectrum in self.spectrum_list:
-                wn_data = spectrum.get("wavenumbers")
-                if wn_data is not None:
-                    wn = np.array(wn_data)
-                    if wn.size > 0:
-                        wn_min_vals.append(wn.min())
-                        wn_max_vals.append(wn.max())
-            if wn_min_vals and wn_max_vals:
-                wn_range_str = f"{min(wn_min_vals):.2f}–{max(wn_max_vals):.2f} cm⁻¹"
-            else:
-                wn_range_str = "Not Set"
-        else:
-            wn_range_str = "Not Set"
-
-        # Time range
-        if timestamps:
-            first_time_point = datetime.fromtimestamp(min(timestamps)).strftime('%Y-%m-%d %H:%M:%S')
-            last_time_point = datetime.fromtimestamp(max(timestamps)).strftime('%Y-%m-%d %H:%M:%S')
-        else:
-            first_time_point, last_time_point = "Not Set", "Not Set"
-
         # Summary string
         summary_str = (
-            #f"Entries: {len(self.combined_list)}, "
-            f"Abs Range: {min(abs_min_vals):.4f}–{max(abs_max_vals):.4f} | "
-            f"Temp Range: {min(temp_min_vals):.2f}–{max(temp_max_vals):.2f} K | "
-            f"Wavenumber Range: {wn_range_str}"
-            #f"Time Range: {first_time_point} - {last_time_point}"
+            f"Abs Range: {abs_min:.4f}–{abs_max:.4f} | "
+            f"Temp Range: {temp_min:.4f}–{temp_max:.4f} K | "
+            f"Wavenumber Range: {wn_min:.2f}–{wn_max:.2f} cm⁻¹"
         )
 
         self.combined_summary_label.setText(summary_str)
