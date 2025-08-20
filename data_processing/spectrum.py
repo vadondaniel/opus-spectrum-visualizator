@@ -1,11 +1,12 @@
 import os
 from datetime import datetime
 from pathlib import Path
-import spectrochempy as scp
 import numpy as np
 import re
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from utils.read_opus import read_opus
 
 def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
     """
@@ -83,7 +84,7 @@ def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
         try:
             timestamp_unix = os.path.getmtime(file_path)
             timestamp_dt = datetime.fromtimestamp(timestamp_unix)
-            X = scp.read_opus(file_path)
+            X = read_opus(file_path)
             wavenumbers = X.x.to('1/cm').data
             absorbance = X.data[0]
             if wavenumbers is None or absorbance is None:
