@@ -16,32 +16,44 @@ in CMD
 
 ---
 
+This project uses read_opus.py by LCS - Laboratoire Catalyse et Spectrochimie, Caen, France. (CeCILL-B license).
+
+Original source: [GitHub](https://github.com/spectrochempy/spectrochempy/)
+
+CeCILL-B License summary:
+
+- You may use, modify, and distribute this software.
+- Attribution must be retained.
+- Software is provided "as-is" without any warranty.
+
+---
+
 ## ✅ **1. Choose the Right Framework**
 
 Since you want:
 
-* Folder selection
-* File parsing and processing
-* 3D visualization
-* Local desktop-style UI
+- Folder selection
+- File parsing and processing
+- 3D visualization
+- Local desktop-style UI
 
 ### 🔹 Best Fit: **PyQt5 / PyQt6** or **PySide6**
 
-* Pros:
+- Pros:
 
-  * Native-looking, responsive desktop UI
-  * File/folder dialogs
-  * Embeds 3D plots (via `matplotlib` or `pyqtgraph`)
-  * Highly customizable
+  - Native-looking, responsive desktop UI
+  - File/folder dialogs
+  - Embeds 3D plots (via `matplotlib` or `pyqtgraph`)
+  - Highly customizable
 
 ### 🔹 Simpler Alternative: **Tkinter**
 
-* Easier to learn, built into Python, but limited GUI flexibility and 3D plotting
+- Easier to learn, built into Python, but limited GUI flexibility and 3D plotting
 
 ### 🔹 Web-based UI: **Dash or Flask**
 
-* Dash is great for data science dashboards with built-in Plotly 3D
-* But folder selection & file I/O is clunky via browser
+- Dash is great for data science dashboards with built-in Plotly 3D
+- But folder selection & file I/O is clunky via browser
 
 > **Recommendation**: Go with **PyQt5 or PySide6** for a full-featured, desktop-native UI. You can add Dash or Flask later for web-based access if needed.
 
@@ -75,10 +87,10 @@ my_temp_spectrum_app/
 
 ## ✅ **3. Libraries to Use**
 
-* **PyQt6** – UI
-* **matplotlib** or **plotly** – for 3D plots
-* **pandas / numpy** – for data parsing and correlation
-* **os / pathlib** – for file handling
+- **PyQt6** – UI
+- **matplotlib** or **plotly** – for 3D plots
+- **pandas / numpy** – for data parsing and correlation
+- **os / pathlib** – for file handling
 
 ---
 
@@ -88,10 +100,10 @@ my_temp_spectrum_app/
 2. **Create dummy temp/spectrum data** to test
 3. **Build GUI:**
 
-   * Folder picker
-   * File list preview
-   * Process button
-   * 3D plot widget
+   - Folder picker
+   - File list preview
+   - Process button
+   - 3D plot widget
 4. **Implement data loaders** in `data_processing/`
 5. **Build correlation logic** (e.g., correlation matrix)
 6. **Plot correlation in 3D**
