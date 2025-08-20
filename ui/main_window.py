@@ -2,6 +2,7 @@
 import sys
 import os
 from datetime import datetime
+import tempfile
 import numpy as np
 
 from PyQt6.QtWidgets import (
@@ -9,8 +10,10 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QFileDialog, QTableWidget, QTableWidgetItem,
     QProgressBar, QLineEdit, QCheckBox, QStackedWidget, QMessageBox, QComboBox
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
 from PyQt6.QtGui import QIntValidator, QGuiApplication
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+import plotly.graph_objects as go
 
 from data_processing.spectrum import (
     interpolate_spectrum_data, process_spectrum_data
@@ -722,6 +725,63 @@ class WizardMainWindow(QMainWindow):
             index_offset=True
         )
 
+    def show_3d_surface_window(self, combined_data, cmap='plasma', max_points=2_000_000):
+        if not combined_data or not isinstance(combined_data, list) or not isinstance(combined_data[0], dict):
+            QMessageBox.warning(self, "3D Plot", "Data format invalid.")
+            return None
+
+        # Convert to arrays
+        wavenumbers = np.asarray(combined_data[0]["wavenumbers"])
+        temperatures = np.asarray([entry["temperature"] for entry in combined_data])
+        absorbances = np.asarray([entry["absorbance"] for entry in combined_data])
+
+        # Downsample if too big
+        M, N = absorbances.shape
+        if M * N > max_points:
+            step_m = max(1, int(np.ceil(M / np.sqrt(max_points / N))))
+            step_n = max(1, int(np.ceil(N / np.sqrt(max_points / M))))
+            temperatures = temperatures[::step_m]
+            wavenumbers = wavenumbers[::step_n]
+            absorbances = absorbances[::step_m, ::step_n]
+
+        # Plotly figure
+        fig = go.Figure(data=[go.Surface(z=absorbances, x=wavenumbers, y=temperatures, colorscale=cmap)])
+        fig.update_layout(
+            title="3D Absorbance Surface",
+            scene=dict(
+                xaxis_title="Wavenumber (cm⁻¹)",
+                yaxis_title="Temperature (K)",
+                zaxis_title="Absorbance"
+            ),
+            autosize=True
+        )
+
+        # Save HTML to temp file with Plotly inline
+        tmp_html = os.path.join(tempfile.gettempdir(), "plotly_surface.html")
+        fig.write_html(tmp_html, include_plotlyjs='inline')
+
+        # PyQt window
+        win = QMainWindow()
+        win.setWindowTitle("3D Absorbance Surface")
+        central_widget = QWidget()
+        layout = QVBoxLayout(central_widget)
+        view = QWebEngineView()
+        view.setUrl(QUrl.fromLocalFile(tmp_html))
+        
+        # Force repaint when finished loading
+        def on_load_finished(ok):
+            if ok:
+                # tiny resize triggers redraw
+                view.resize(view.width() + 1, view.height() + 1)
+                view.resize(view.width() - 1, view.height() - 1)
+
+        view.loadFinished.connect(on_load_finished)
+        layout.addWidget(view)
+        win.setCentralWidget(central_widget)
+        win.resize(1200, 800)
+        win.show()
+        return win
+
     def _plot_3d(self):
         if not self.combined_list:
             QMessageBox.warning(self, "Plot 3D", "No combined data to plot.")
@@ -739,7 +799,7 @@ class WizardMainWindow(QMainWindow):
 
         cmap = self.cmap_dropdown.currentText()
 
-        plot_3d_surface(data_to_plot, cmap=cmap)
+        self.surface_window = self.show_3d_surface_window(data_to_plot, cmap)
 
     def _plot_absorption(self):
         if not self.combined_list:
