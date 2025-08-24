@@ -47,7 +47,6 @@ class ProcessingThread(QThread):
 
     def run(self):
         def callback(msg):
-            # Accept '10%', 10, '10.0', etc. Emit integer percent when possible.
             pct = None
             try:
                 if isinstance(msg, str):
@@ -69,7 +68,6 @@ class ProcessingThread(QThread):
                 self.progress_update.emit(int(pct))
 
         try:
-            # Call the function with the progress callback
             result = self.func(self.folder_path, progress_callback=callback, *self.args, **self.kwargs)
             if result is None:
                 result = []
@@ -83,10 +81,7 @@ class WizardMainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Temperature & Spectrum Data Analyzer")
 
-        # Set a larger size for the window
-        self.resize(700, 400)  # Width, Height in pixels
-        
-        # Center the window on the screen
+        self.resize(700, 400) 
         screen_geometry = QGuiApplication.primaryScreen().geometry()
         x = (screen_geometry.width() - self.width()) // 2
         y = (screen_geometry.height() - self.height()) // 2
@@ -94,7 +89,6 @@ class WizardMainWindow(QMainWindow):
 
         # self.showMaximized()
 
-        # Raw lists (list-of-dicts) returned by your processing functions
         self.spectrum_list = None
         self.temperature_list_raw = None
         self.temperature_list_filtered = None
@@ -103,17 +97,12 @@ class WizardMainWindow(QMainWindow):
         self.spectrum_thread = None
         self.temperature_thread = None
 
-        # Stacked widget for steps
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
 
-        # build pages
         self._build_spectrum_page()
         self._build_temperature_page()
         self._build_combined_page()
-
-        # Navigation buttons area (bottom-right)
-        # We'll show simple Next/Previous inside each page's layout to keep it full-screen
 
     # ----------------------- Spectrum Page -----------------------
     def _build_spectrum_page(self):
@@ -136,13 +125,13 @@ class WizardMainWindow(QMainWindow):
         h.addWidget(self.spec_process_btn)
         v.addLayout(h)
 
-        # Progress bar (percentage visible)
+        # Progress bar
         self.spec_progress = QProgressBar()
         self.spec_progress.setFormat("%p%")
         self.spec_progress.setTextVisible(True)
         v.addWidget(self.spec_progress)
 
-        # General data label (hidden initially, styled like progress bar)
+        # General data label
         self.spec_general_label = QLabel("")
         self.spec_general_label.setVisible(False)
         self.spec_general_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -158,19 +147,15 @@ class WizardMainWindow(QMainWindow):
         v.addWidget(self.spec_general_label)
 
 
-        # Table (File, Datetime, Abs Range)
+        # Table
         self.spec_table = QTableWidget()
         self.spec_table.setColumnCount(3)
         self.spec_table.setHorizontalHeaderLabels(["File", "Datetime", "Abs Min–Max"])
-        v.addWidget(self.spec_table)
-        
-        # Auto-size the table columns
         self.spec_table.resizeColumnsToContents()
-
-        # Set the horizontal header to stretch
         self.spec_table.horizontalHeader().setStretchLastSection(True)
+        v.addWidget(self.spec_table)
 
-        # Plot controls (match your original settings)
+        # Plot controls
         control_row = QHBoxLayout()
         self.spec_start = QLineEdit("1")
         self.spec_start.setValidator(QIntValidator())
@@ -333,7 +318,7 @@ class WizardMainWindow(QMainWindow):
         self.temp_progress.setTextVisible(True)
         v.addWidget(self.temp_progress)
         
-        # General data label (hidden initially, styled like progress bar)
+        # General data label
         self.temp_general_label = QLabel("")
         self.temp_general_label.setVisible(False)
         self.temp_general_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -352,15 +337,11 @@ class WizardMainWindow(QMainWindow):
         self.temp_table = QTableWidget()
         self.temp_table.setColumnCount(2)
         self.temp_table.setHorizontalHeaderLabels(["Datetime", "Temperature (K)"])
-        v.addWidget(self.temp_table)
-        
-        # Auto-size the table columns
         self.temp_table.resizeColumnsToContents()
-
-        # Set the horizontal header to stretch
         self.temp_table.horizontalHeader().setStretchLastSection(True)
+        v.addWidget(self.temp_table)
 
-        # Plot controls (Start, End, Smooth)
+        # Plot controls
         ctrl = QHBoxLayout()
         self.temp_start = QLineEdit("1")
         self.temp_start.setValidator(QIntValidator())
@@ -402,7 +383,6 @@ class WizardMainWindow(QMainWindow):
         if folder:
             self.temp_folder_label.setText(folder)
             self.temp_folder_text = folder
-            # enable processing only if spectrum already processed
             if self.spectrum_list:
                 self.temp_process_btn.setEnabled(True)
 
@@ -440,7 +420,7 @@ class WizardMainWindow(QMainWindow):
             QMessageBox.warning(self, "Temperature", "No temperature data processed.")
             self.btn_next_2.setEnabled(False)
             return
-        # Filter to spectrum timeframe (single pass)
+        # Filter to spectrum timeframe
         if self.spectrum_list:
             first_spec_ts = self.spectrum_list[0]["timestamp"]
             last_spec_ts = self.spectrum_list[-1]["timestamp"]
@@ -452,7 +432,7 @@ class WizardMainWindow(QMainWindow):
                     idx_before = i
                 if idx_after is None and ts >= last_spec_ts:
                     idx_after = i
-                    break  # stop early once last is found
+                    break
 
             if idx_before is not None and idx_after is not None and idx_after >= idx_before:
                 self.temperature_list_filtered = (
@@ -465,7 +445,7 @@ class WizardMainWindow(QMainWindow):
         else:
             self.temperature_list_filtered = self.temperature_list_raw
 
-        # Populate table + compute min/max in one pass
+        # Populate table + compute min/max
         row_count = len(self.temperature_list_filtered)
         self.temp_table.setRowCount(row_count)
 
@@ -522,14 +502,10 @@ class WizardMainWindow(QMainWindow):
 
         self.combined_table = QTableWidget()
         self.combined_table.setColumnCount(3)
-        self.combined_table.setHorizontalHeaderLabels(["Datetime", "Temperature (K)", "Abs Min–Max"]) 
-        v.addWidget(self.combined_table)
-
-        # Auto-size the table columns
+        self.combined_table.setHorizontalHeaderLabels(["Datetime", "Temperature (K)", "Abs Min–Max"])
         self.combined_table.resizeColumnsToContents()
-
-        # Set the horizontal header to stretch
         self.combined_table.horizontalHeader().setStretchLastSection(True)
+        v.addWidget(self.combined_table)
 
         # Create a horizontal layout for the 3D plot controls
         h3d_layout = QHBoxLayout()
@@ -577,10 +553,8 @@ class WizardMainWindow(QMainWindow):
         self.stack.addWidget(page)
 
     def _goto_step(self, idx: int):
-        # Basic navigation; when jumping to step 3 we ensure combine is run
         self.stack.setCurrentIndex(idx)
         if idx == 2:
-            # combine automatically
             self._combine()
 
     def _combine(self):
@@ -616,7 +590,7 @@ class WizardMainWindow(QMainWindow):
         wn_max = float("-inf")
         timestamps = []
 
-        # Single pass: fill table + compute all stats
+        # Fill table + compute all stats
         for i, c in enumerate(self.combined_list):
             dt = c.get("datetime") or c.get("timestamp") or ""
             temp = c.get("temperature", "")
@@ -682,7 +656,6 @@ class WizardMainWindow(QMainWindow):
 
         data = interpolate_spectrum_data(self.spectrum_list) if self.spec_interp.isChecked() else self.spectrum_list
 
-        # call your plotting function; pass a no-op progress callback since logs are removed
         plot_spectra(
             data,
             start_index=start,
@@ -709,10 +682,7 @@ class WizardMainWindow(QMainWindow):
         except Exception:
             win = 0
         
-        # Check the state of the interpolation checkbox
         inter = self.temp_interp.checkState() == Qt.CheckState.Checked
-
-        # Interpolate temperature data if the checkbox is checked
         data = interpolate_to_round_seconds(self.temperature_list_filtered) if inter else self.temperature_list_filtered
 
         plot_temperature(
