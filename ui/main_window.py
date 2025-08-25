@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QLineEdit, QCheckBox, QStackedWidget, QMessageBox, QComboBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
-from PyQt6.QtGui import QIntValidator, QGuiApplication
+from PyQt6.QtGui import QIntValidator, QGuiApplication, QFont
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import plotly.graph_objects as go
 
@@ -79,7 +79,7 @@ class ProcessingThread(QThread):
 class WizardMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Temperature & Spectrum Data Analyzer")
+        self.setWindowTitle("Spectrum & Temperature Data Analyzer")
 
         self.resize(700, 400) 
         screen_geometry = QGuiApplication.primaryScreen().geometry()
@@ -109,7 +109,13 @@ class WizardMainWindow(QMainWindow):
         page = QWidget()
         v = QVBoxLayout(page)
 
-        title = QLabel("<h2>Step 1 of 3 — Spectrum</h2>")
+        title = QLabel("""
+            <h3>
+                <span style="color:#2c7be5; font-weight:bold;">Spectrum</span> ›
+                <span style="color:gray;">Temperature</span> ›
+                <span style="color:gray;">Combined</span>
+            </h3>
+        """)
         v.addWidget(title)
 
         # Folder selector + process
@@ -295,7 +301,13 @@ class WizardMainWindow(QMainWindow):
         page = QWidget()
         v = QVBoxLayout(page)
 
-        title = QLabel("<h2>Step 2 of 3 — Temperature</h2>")
+        title = QLabel("""
+            <h3>
+                <span style="color:gray;">Spectrum</span> ›
+                <span style="color:#2c7be5; font-weight:bold;">Temperature</span> ›
+                <span style="color:gray;">Combined</span>
+            </h3>
+        """)
         v.addWidget(title)
 
         # Folder + process
@@ -483,7 +495,13 @@ class WizardMainWindow(QMainWindow):
         page = QWidget()
         v = QVBoxLayout(page)
 
-        title = QLabel("<h2>Step 3 of 3 — Combined Data</h2>")
+        title = QLabel("""
+            <h3>
+                <span style="color:gray;">Spectrum</span> ›
+                <span style="color:gray;">Temperature</span> ›
+                <span style="color:#2c7be5; font-weight:bold;">Combined</span>
+            </h3>
+        """)
         v.addWidget(title)
 
         # Summary label
