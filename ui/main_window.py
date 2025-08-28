@@ -610,10 +610,10 @@ class WizardMainWindow(QMainWindow):
 
         # Range selection for wavelengths
         self.wavelength_range_input = QLineEdit()
-        self.wavelength_range_input.setPlaceholderText("Enter wavelength range (e.g., 1000-2000)")
+        self.wavelength_range_input.setPlaceholderText("Enter wavelength range(s) (e.g., 900-1000, 3100-3200)")
         habs_layout.addWidget(self.wavelength_range_input)
 
-        btn_plot_absorption = QPushButton("Plot Absorption Over Temperature")
+        btn_plot_absorption = QPushButton("Plot Peak Analysis")
         btn_plot_absorption.clicked.connect(self._plot_absorption)
         habs_layout.addWidget(btn_plot_absorption)
 
@@ -865,24 +865,26 @@ class WizardMainWindow(QMainWindow):
 
     def _plot_absorption(self):
         if not self.combined_list:
-            QMessageBox.warning(self, "Plot Absorption", "No combined data to plot.")
+            QMessageBox.warning(self, "Peak Analysis", "No combined data to plot.")
             return
 
-        wavelength_range = self.wavelength_range_input.text()
-        if not wavelength_range:
-            QMessageBox.warning(self, "Plot Absorption", "Please enter a wavelength range.")
+        wavelength_ranges = self.wavelength_range_input.text()
+        if not wavelength_ranges:
+            QMessageBox.warning(self, "Peak Analysis", "Please enter one or more wavelength ranges.")
             return
 
         try:
-            start_wavelength, end_wavelength = map(float, wavelength_range.split('-'))
+            ranges = []
+            for part in wavelength_ranges.split(","):
+                start, end = map(float, part.strip().split('-'))
+                ranges.append((start, end))
         except ValueError:
-            QMessageBox.warning(self, "Plot Absorption", "Invalid wavelength range format.")
+            QMessageBox.warning(self, "Peak Analysis", "Invalid format. Use e.g. 950-1050, 3050-3150")
             return
 
         plot_absorption_vs_temperature(
             self.combined_list,
-            start_wavelength,
-            end_wavelength,
+            ranges,
             smooth=True,
             window_size=float(self.smoothing_input.text()) if self.smoothing_input.text() else 5.0
         )

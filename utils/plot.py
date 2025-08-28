@@ -220,8 +220,9 @@ def plot_3d_surface(combined_data, cmap='plasma'):
 
 def plot_absorption_vs_temperature(
     combined_list,
-    start_wavelength, end_wavelength,
-    smooth=False, window_size=5,
+    wavelength_ranges,
+    smooth=False,
+    window_size=5,
 ):
     """
     Plot summed absorbance vs temperature with optional moving average smoothing.
@@ -236,37 +237,61 @@ def plot_absorption_vs_temperature(
     if not combined_list:
         raise ValueError("No combined data to plot.")
 
-    # Extract temperatures and summed absorbance
     temperatures = np.array([e["temperature"] for e in combined_list])
-    summed_absorbance = np.array([
-        np.sum(e["absorbance"][(e["wavenumbers"] >= start_wavelength) &
-                               (e["wavenumbers"] <= end_wavelength)])
-        for e in combined_list
-    ])
-
-    # Sort by temperature
     sort_idx = np.argsort(temperatures)
     temperatures = temperatures[sort_idx]
-    summed_absorbance = summed_absorbance[sort_idx]
 
-    # Plot raw data
     plt.figure(figsize=(10, 6))
-    plt.plot(temperatures, summed_absorbance, marker='o', linestyle='-', color='blue', label="Raw")
 
-    if smooth:
-        smoothed_abs = np.zeros_like(summed_absorbance, dtype=float)
+    # Discrete tableau colors (10 highly distinct colors)
+    base_colors = plt.cm.tab10.colors  
 
-        for i, T in enumerate(temperatures):
-            # Find indices within smooth_width/2 around current temperature
-            mask = np.abs(temperatures - T) <= window_size / 2
-            smoothed_abs[i] = np.mean(summed_absorbance[mask])
+    for i, (start_wavelength, end_wavelength) in enumerate(wavelength_ranges):
+        color = base_colors[i % len(base_colors)]  # cycle if >10 ranges
 
-        # Overlay smoothed curve
-        plt.plot(temperatures, smoothed_abs, marker='', linestyle='-', color='red', linewidth=2, label="Smoothed")
+        summed_absorbance = np.array([
+            np.sum(e["absorbance"][(e["wavenumbers"] >= start_wavelength) &
+                                   (e["wavenumbers"] <= end_wavelength)])
+            for e in combined_list
+        ])[sort_idx]
+
+        # Raw
+        plt.plot(
+            temperatures,
+            summed_absorbance,
+            marker='o',
+            linestyle='-',
+            color=color,
+            label=f"{start_wavelength}-{end_wavelength} raw"
+        )
+
+        if smooth:
+            smoothed_abs = np.zeros_like(summed_absorbance, dtype=float)
+            for j, T in enumerate(temperatures):
+                mask = np.abs(temperatures - T) <= window_size / 2
+                smoothed_abs[j] = np.mean(summed_absorbance[mask])
+
+            # Smoothed → same color, dashed
+            plt.plot(
+                temperatures,
+                smoothed_abs,
+                linestyle='--',
+                linewidth=2,
+                color=color,
+                label=f"{start_wavelength}-{end_wavelength} smoothed"
+            )
 
     plt.xlabel("Temperature (K)")
-    plt.ylabel(f"Summed Absorbance ({start_wavelength}-{end_wavelength})")
-    plt.title("Absorption vs Temperature")
+    plt.ylabel("Integrated Absorbance (Area under curve)")
+    if len(wavelength_ranges) == 1:
+        title = "Peak Analysis"
+    elif len(wavelength_ranges) == 2:
+        title = "Dual Peak Analysis"
+    elif len(wavelength_ranges) == 3:
+        title = "Triple Peak Analysis"
+    else:
+        title = f"Multi-Peak Analysis ({len(wavelength_ranges)} ranges)"
+    plt.title(title)
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
