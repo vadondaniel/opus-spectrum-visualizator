@@ -125,7 +125,7 @@ class WizardMainWindow(QMainWindow):
             "Step-by-Step Instructions:\n\n"
             "1. Select the folder containing your OPUS files.\n"
             "2. Click 'Process Spectrum Data' and wait for the process to finish.\n"
-            "3. Click 'Next,' then select the folder containing your temperature data file (singular txt file)."
+            "3. Click 'Next,' then select your temperature data file (singular txt file)."
             "4. Click 'Process Temperature Data' and wait for the process to finish.\n"
             "5. Click 'Next' to combine the processed spectrum and temperature data.\n"
             "6. Use the controls to choose which data to display from the pages and how it should be visualized.\n"
