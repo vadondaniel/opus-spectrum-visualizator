@@ -5,13 +5,13 @@ import pandas as pd
 
 def process_temperature_data(file_path, progress_callback=None, num_chunks=100):
     """
-    Processes temperature data from a specified file in a folder.
+    Processes temperature data from a specified file.
 
-    This function scans a given folder for a temperature data file, reads the relevant columns (timestamp and temperature),
+    This function opens a temperature data file, reads the relevant columns (timestamp and temperature),
     and processes the data in chunks. The processing can report progress through a callback function.
 
     Parameters:
-    folder_path (str or Path): The path to the folder containing the temperature data file.
+    file_path (str or Path): The path to the temperature data file.
     progress_callback (function, optional): A callback function that takes a string message as an argument.
         This function can be used to report progress during the data processing. If not provided,
         progress messages will be printed to the console.
@@ -19,7 +19,6 @@ def process_temperature_data(file_path, progress_callback=None, num_chunks=100):
 
     Returns:
     list: A list of dictionaries containing the processed temperature data, where each dictionary has:
-        - "file_path": The path to the processed file.
         - "timestamp": The Unix timestamp value from the data.
         - "temperature": The temperature value corresponding to the timestamp. (in Kelvin)
 
@@ -27,8 +26,8 @@ def process_temperature_data(file_path, progress_callback=None, num_chunks=100):
     ValueError: If the specified folder does not contain exactly one temperature file.
 
     Example:
-    >>> folder_path = "/path/to/temperature/data"
-    >>> temperature_data = process_temperature_data(folder_path)
+    >>> file_path = "/path/to/temperature/data"
+    >>> temperature_data = process_temperature_data(file_path)
     """
     # Read only the columns we need (2=timestamp, 5=temperature)
     df = pd.read_csv(file_path, sep='\t', header=0, usecols=[2, 5], dtype=float, engine='c')
@@ -48,7 +47,7 @@ def process_temperature_data(file_path, progress_callback=None, num_chunks=100):
         chunk = df.iloc[i:i + chunk_size]
         # Vectorized conversion to list of dicts
         result_data.extend(
-            [{"file_path": file_path, "timestamp": t, "temperature": temp}
+            [{"timestamp": t, "temperature": temp}
              for t, temp in zip(chunk.iloc[:, 0], chunk.iloc[:, 1])]
         )
 
