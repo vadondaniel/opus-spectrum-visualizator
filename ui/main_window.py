@@ -325,7 +325,7 @@ class WizardMainWindow(QMainWindow):
         self.btn_next_1.setEnabled(True)
 
         # Unlock temperature processing if folder chosen
-        if getattr(self, 'temp_folder_text', None):
+        if getattr(self, 'temp_file_text', None):
             try:
                 self.temp_process_btn.setEnabled(True)
             except Exception:
@@ -364,14 +364,14 @@ class WizardMainWindow(QMainWindow):
 
         # Folder + process
         h = QHBoxLayout()
-        self.temp_folder_label = QLineEdit()
-        self.temp_folder_label.setReadOnly(True)
-        btn_browse_temp = QPushButton("Browse Temperature Folder")
+        self.temp_file_label = QLineEdit()
+        self.temp_file_label.setReadOnly(True)
+        btn_browse_temp = QPushButton("Browse Temperature File")
         btn_browse_temp.clicked.connect(self._browse_temperature)
         self.temp_process_btn = QPushButton("Process Temperature Data")
         self.temp_process_btn.setEnabled(False)  # locked until spectrum processed
         self.temp_process_btn.clicked.connect(self._process_temperature)
-        h.addWidget(self.temp_folder_label)
+        h.addWidget(self.temp_file_label)
         h.addWidget(btn_browse_temp)
         h.addWidget(self.temp_process_btn)
         v.addLayout(h)
@@ -443,17 +443,22 @@ class WizardMainWindow(QMainWindow):
         self.stack.addWidget(page)
 
     def _browse_temperature(self):
-        folder = QFileDialog.getExistingDirectory(self, "Select Temperature Data Folder")
-        if folder:
-            self.temp_folder_label.setText(folder)
-            self.temp_folder_text = folder
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Temperature Data File",
+            "",
+            "Data Files (*.txt *.csv);;All Files (*)"
+        )
+        if file_path:
+            self.temp_file_label.setText(file_path)
+            self.temp_file_path = file_path
             if self.spectrum_list:
                 self.temp_process_btn.setEnabled(True)
 
     def _process_temperature(self):
-        folder = self.temp_folder_label.text()
-        if not folder:
-            QMessageBox.warning(self, "No folder", "Select a temperature folder first.")
+        file_path = self.temp_file_label.text()
+        if not file_path:
+            QMessageBox.warning(self, "No file", "Select a temperature file first.")
             return
         if not self.spectrum_list:
             QMessageBox.warning(self, "Locked", "Temperature processing is locked until spectrum is processed.")
@@ -465,13 +470,10 @@ class WizardMainWindow(QMainWindow):
         self.temp_progress.setValue(0)
         self.temp_progress.setVisible(True)
         self.temp_general_label.setVisible(False)
-        self.temp_progress.setVisible(True)
-        self.temp_progress.setValue(0)
-        
         self.temp_process_btn.setEnabled(False)
 
         # Start temperature processing thread
-        self.temperature_thread = ProcessingThread(process_temperature_data, folder)
+        self.temperature_thread = ProcessingThread(process_temperature_data, file_path)
         self.temperature_thread.progress_update.connect(self.temp_progress.setValue)
         self.temperature_thread.result_ready.connect(self._on_temperature_done)
         self.temperature_thread.error.connect(self._on_error)

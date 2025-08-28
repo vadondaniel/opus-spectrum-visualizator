@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-def process_temperature_data(folder_path, progress_callback=None, num_chunks=100):
+def process_temperature_data(file_path, progress_callback=None, num_chunks=100):
     """
     Processes temperature data from a specified file in a folder.
 
@@ -30,11 +30,6 @@ def process_temperature_data(folder_path, progress_callback=None, num_chunks=100
     >>> folder_path = "/path/to/temperature/data"
     >>> temperature_data = process_temperature_data(folder_path)
     """
-    file_paths = list(Path(folder_path).rglob("*.*"))
-    if len(file_paths) != 1:
-        raise ValueError("The folder must contain exactly one temperature file.")
-    file_path = file_paths[0]
-
     # Read only the columns we need (2=timestamp, 5=temperature)
     df = pd.read_csv(file_path, sep='\t', header=0, usecols=[2, 5], dtype=float, engine='c')
     df = df.dropna()
