@@ -145,8 +145,7 @@ class WizardMainWindow(QMainWindow):
             <li>Plotly (MIT): Interactive 2D and 3D plots</li>
             <li><a href="https://github.com/spectrochempy/spectrochempy">SpectroChemPy</a> (CeCILL-B/C): OPUS file handling and spectroscopic data processing</li>
         </ul>
-        <b>Developed by:</b> Dániel Vadon & Dr. Bálint Rubovszky<br><br>
-        Thanks to the open-source community and contributors!
+        <b>Developed by:</b> Dániel Vadon & Dr. Bálint Rubovszky
         """
         
         msg = QMessageBox(self)
@@ -586,6 +585,12 @@ class WizardMainWindow(QMainWindow):
         self.smoothing_input = QLineEdit()
         self.smoothing_input.setPlaceholderText("Enter temperature smoothing factor (can improve performance)")
         h3d_layout.addWidget(self.smoothing_input)
+        
+        # Plot type dropdown
+        self.plot_type_dropdown = QComboBox()
+        self.plot_type_dropdown.addItems(["Surface", "Scatter"])
+        h3d_layout.addWidget(QLabel("Plot Type:"))
+        h3d_layout.addWidget(self.plot_type_dropdown)
 
         # Colormap dropdown for 3D plot
         self.cmap_dropdown = QComboBox()
@@ -594,7 +599,7 @@ class WizardMainWindow(QMainWindow):
         h3d_layout.addWidget(QLabel("Select Colormap:"))
         h3d_layout.addWidget(self.cmap_dropdown)
 
-        btn_plot_3d = QPushButton("Plot 3D Surface")
+        btn_plot_3d = QPushButton("Plot 3D")
         btn_plot_3d.clicked.connect(self._plot_3d)
         h3d_layout.addWidget(btn_plot_3d)
 
@@ -767,7 +772,7 @@ class WizardMainWindow(QMainWindow):
             index_offset=True
         )
 
-    def show_3d_surface_window(self, combined_data, cmap='plasma', max_points=2_000_000):
+    def show_3d_plot_window(self, combined_data, plot_type="Surface", cmap='plasma', max_points=2_000_000):
         if not combined_data or not isinstance(combined_data, list) or not isinstance(combined_data[0], dict):
             QMessageBox.warning(self, "3D Plot", "Data format invalid.")
             return None
@@ -786,10 +791,26 @@ class WizardMainWindow(QMainWindow):
             wavenumbers = wavenumbers[::step_n]
             absorbances = absorbances[::step_m, ::step_n]
 
-        # Plotly figure
-        fig = go.Figure(data=[go.Surface(z=absorbances, x=wavenumbers, y=temperatures, colorscale=cmap)])
+        # Create Plotly figure depending on type
+        if plot_type == "Surface":
+            fig = go.Figure(data=[
+                go.Surface(z=absorbances, x=wavenumbers, y=temperatures, colorscale=cmap)
+            ])
+        elif plot_type == "Scatter":
+            # Flatten arrays for scatter plot
+            T, W = np.meshgrid(temperatures, wavenumbers, indexing="ij")
+            fig = go.Figure(data=[
+                go.Scatter3d(
+                    x=W.flatten(),
+                    y=T.flatten(),
+                    z=absorbances.flatten(),
+                    mode="markers",
+                    marker=dict(size=2, color=absorbances.flatten(), colorscale=cmap)
+                )
+            ])
+        
+        fig.update_layout(title=f"3D Absorbance {plot_type} Plot")
         fig.update_layout(
-            title="3D Absorbance Surface",
             scene=dict(
                 xaxis_title="Wavenumber (cm⁻¹)",
                 yaxis_title="Temperature (K)",
@@ -798,22 +819,20 @@ class WizardMainWindow(QMainWindow):
             autosize=True
         )
 
-        # Save HTML to temp file with Plotly inline
-        tmp_html = os.path.join(tempfile.gettempdir(), "plotly_surface.html")
+        # Save HTML to temp file
+        tmp_html = os.path.join(tempfile.gettempdir(), "plotly_3d.html")
         fig.write_html(tmp_html, include_plotlyjs='inline')
 
         # PyQt window
         win = QMainWindow()
-        win.setWindowTitle("3D Absorbance Surface")
+        win.setWindowTitle(f"3D Absorbance {plot_type} Plot")
         central_widget = QWidget()
         layout = QVBoxLayout(central_widget)
         view = QWebEngineView()
         view.setUrl(QUrl.fromLocalFile(tmp_html))
         
-        # Force repaint when finished loading
         def on_load_finished(ok):
             if ok:
-                # tiny resize triggers redraw
                 view.resize(view.width() + 1, view.height() + 1)
                 view.resize(view.width() - 1, view.height() - 1)
 
@@ -840,8 +859,9 @@ class WizardMainWindow(QMainWindow):
                 return
 
         cmap = self.cmap_dropdown.currentText()
-
-        self.surface_window = self.show_3d_surface_window(data_to_plot, cmap)
+        plot_type = self.plot_type_dropdown.currentText()
+    
+        self.surface_window = self.show_3d_plot_window(data_to_plot, plot_type=plot_type, cmap=cmap)
 
     def _plot_absorption(self):
         if not self.combined_list:
