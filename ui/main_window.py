@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QLineEdit, QCheckBox, QStackedWidget, QMessageBox, QComboBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
-from PyQt6.QtGui import QIntValidator, QGuiApplication, QFont
+from PyQt6.QtGui import QIntValidator, QGuiApplication, QAction
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import plotly.graph_objects as go
 
@@ -103,6 +103,58 @@ class WizardMainWindow(QMainWindow):
         self._build_spectrum_page()
         self._build_temperature_page()
         self._build_combined_page()
+        
+        # Create Menu Bar
+        menu_bar = self.menuBar()
+
+        # ---- Help Menu ----
+        help_menu = menu_bar.addMenu("&Menu")
+
+        how_it_works_action = QAction("&How It Works", self)
+        how_it_works_action.triggered.connect(self._show_help)
+        help_menu.addAction(how_it_works_action)
+
+        credits_action = QAction("&Credits", self)
+        credits_action.triggered.connect(self._show_credits)
+        help_menu.addAction(credits_action)
+        
+    def _show_help(self):
+        QMessageBox.information(
+            self,
+            "How to Use This App",
+            "Step-by-Step Instructions:\n\n"
+            "1. Select the folder containing your OPUS files.\n"
+            "2. Click 'Process Spectrum Data' and wait for the process to finish.\n"
+            "3. Click 'Next,' then select the folder containing your temperature data file (singular txt file)."
+            "4. Click 'Process Temperature Data' and wait for the process to finish.\n"
+            "5. Click 'Next' to combine the processed spectrum and temperature data.\n"
+            "6. Use the controls to choose which data to display from the pages and how it should be visualized.\n"
+            "7. Click 'Plot' to visualize the data in 3D or 2D plots.\n\n"
+            "Tips:\n"
+            "- Refer to Credits for information about used libraries."
+        )
+
+    def _show_credits(self):
+        credits_html = """
+        This application was built using the following libraries:<br>
+        <ul>
+            <li><a href="https://www.riverbankcomputing.com/software/pyqt/intro">PyQt6</a> (LGPL): GUI framework</li>
+            <li>Numpy (BSD): Numerical computations</li>
+            <li>Pandas (BSD): Data handling and CSV processing</li>
+            <li>Matplotlib (PSF): 2D plotting</li>
+            <li>Plotly (MIT): Interactive 2D and 3D plots</li>
+            <li><a href="https://github.com/spectrochempy/spectrochempy">SpectroChemPy</a> (CeCILL-B/C): OPUS file handling and spectroscopic data processing</li>
+        </ul>
+        <b>Developed by:</b> Dániel Vadon & Dr. Bálint Rubovszky<br><br>
+        Thanks to the open-source community and contributors!
+        """
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Credits")
+        msg.setTextFormat(Qt.TextFormat.RichText)  # allow HTML
+        msg.setText(credits_html)
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
 
     # ----------------------- Spectrum Page -----------------------
     def _build_spectrum_page(self):
@@ -816,6 +868,8 @@ class WizardMainWindow(QMainWindow):
     # ----------------------- Error handler -----------------------
     def _on_error(self, msg):
         QMessageBox.critical(self, "Processing Error", msg)
+        self.spec_process_btn.setEnabled(True)
+        self.temp_process_btn.setEnabled(True)
 
 
 # ---------------------- Launch ----------------------
