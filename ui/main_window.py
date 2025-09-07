@@ -250,10 +250,10 @@ class DataProcessingApp(QMainWindow):
         main_layout.addWidget(vis_group)
 
         # === Peak Analysis ===
-        range_group = QGroupBox("Peak Analysis")
-        range_layout = QHBoxLayout()
-        range_layout.setSpacing(10)
-        range_layout.setContentsMargins(10, 6, 10, 6)
+        peak_group = QGroupBox("Peak Analysis")
+        peak_layout = QHBoxLayout()
+        peak_layout.setSpacing(10)
+        peak_layout.setContentsMargins(10, 6, 10, 6)
         
         # Wavelength range input
         self.wavelength_range_input = QLineEdit()
@@ -283,24 +283,24 @@ class DataProcessingApp(QMainWindow):
         self.smoothing_param_label = QLabel("Param:")
         
         # Peak analysis button
-        self.range_btn = QPushButton("Peak Analysis")
-        self.range_btn.setFixedWidth(110)
-        self.range_btn.clicked.connect(self._plot_absorption)
-        self.range_btn.setEnabled(False)
+        self.peak_btn = QPushButton("Peak Analysis")
+        self.peak_btn.setFixedWidth(110)
+        self.peak_btn.clicked.connect(self._plot_absorption)
+        self.peak_btn.setEnabled(False)
         
         # Add widgets
-        range_layout.addWidget(QLabel("Range(s):"))
-        range_layout.addWidget(self.wavelength_range_input)
-        range_layout.addWidget(QLabel("Display:"))
-        range_layout.addWidget(self.display_type_dropdown)
-        range_layout.addWidget(QLabel("Method:"))
-        range_layout.addWidget(self.smoothing_method_dropdown)
-        range_layout.addWidget(self.smoothing_param_label)
-        range_layout.addWidget(self.smoothing_param_spin)
-        range_layout.addWidget(self.range_btn)
+        peak_layout.addWidget(QLabel("Range(s):"))
+        peak_layout.addWidget(self.wavelength_range_input)
+        peak_layout.addWidget(QLabel("Display:"))
+        peak_layout.addWidget(self.display_type_dropdown)
+        peak_layout.addWidget(QLabel("Method:"))
+        peak_layout.addWidget(self.smoothing_method_dropdown)
+        peak_layout.addWidget(self.smoothing_param_label)
+        peak_layout.addWidget(self.smoothing_param_spin)
+        peak_layout.addWidget(self.peak_btn)
         
-        range_group.setLayout(range_layout)
-        main_layout.addWidget(range_group)
+        peak_group.setLayout(peak_layout)
+        main_layout.addWidget(peak_group)
         
         self.smoothing_method_dropdown.currentTextChanged.connect(self._update_smoothing_param_ui)
         self._update_smoothing_param_ui(self.smoothing_method_dropdown.currentText())
@@ -371,7 +371,7 @@ class DataProcessingApp(QMainWindow):
         # Disable buttons until finished
         self.process_btn.setEnabled(False)
         self.plot_btn.setEnabled(False)
-        self.range_btn.setEnabled(False)
+        self.peak_btn.setEnabled(False)
 
         # Spectrum
         self.spectrum_thread = ProcessingThread(process_spectrum_data, self.spectrum_path)
@@ -420,7 +420,7 @@ class DataProcessingApp(QMainWindow):
         else:
             # Enable visualization buttons
             self.plot_btn.setEnabled(True)
-            self.range_btn.setEnabled(True)
+            self.peak_btn.setEnabled(True)
 
         # Re-enable processing start if inputs are still valid
         self._update_start_enabled()
