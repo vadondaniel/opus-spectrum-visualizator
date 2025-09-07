@@ -1,47 +1,35 @@
 #!/usr/bin/env python3
 import sys
 import os
-from datetime import datetime
 import tempfile
 import numpy as np
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QFileDialog, QTableWidget, QTableWidgetItem,
-    QProgressBar, QLineEdit, QCheckBox, QStackedWidget, QMessageBox, QComboBox
+    QPushButton, QLabel, QFileDialog, QProgressBar, QLineEdit, QDialog,
+    QMessageBox, QComboBox, QGroupBox, QTextBrowser
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
-from PyQt6.QtGui import QIntValidator, QGuiApplication, QAction
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import plotly.graph_objects as go
 
-from data_processing.spectrum import (
-    interpolate_spectrum_data, process_spectrum_data
-)
-from data_processing.temperature import (
-    interpolate_to_round_seconds, process_temperature_data
-)
+from data_processing.spectrum import process_spectrum_data
+from data_processing.temperature import process_temperature_data
+
 from data_processing.combined_data import (
     combine_temperature_and_spectrum_data, smooth_combined_by_temperature
 )
-from utils.plot import (
-    plot_absorption_vs_temperature, plot_spectra, plot_temperature, plot_3d_surface
-)
+from utils.plot import plot_absorption_vs_temperature
 
-
+# === Worker Thread Wrapper ===
 class ProcessingThread(QThread):
-    """Generic worker thread that calls a processing function with a progress_callback.
-    The processing functions in your code accept `progress_callback` which sometimes
-    emits strings like '10%' or integers. This thread normalizes and emits ints.
-    """
     progress_update = pyqtSignal(int)
     result_ready = pyqtSignal(object)
     error = pyqtSignal(str)
 
-    def __init__(self, func, folder_path, *args, **kwargs):
+    def __init__(self, func, *args, **kwargs):
         super().__init__()
         self.func = func
-        self.folder_path = folder_path
         self.args = args
         self.kwargs = kwargs
 
@@ -60,583 +48,345 @@ class ProcessingThread(QThread):
                 pct = None
 
             if pct is not None:
-                # Clamp
-                if pct < 0:
-                    pct = 0
-                if pct > 100:
-                    pct = 100
-                self.progress_update.emit(int(pct))
+                pct = max(0, min(100, pct))
+                self.progress_update.emit(pct)
 
         try:
-            result = self.func(self.folder_path, progress_callback=callback, *self.args, **self.kwargs)
+            result = self.func(*self.args, progress_callback=callback, **self.kwargs)
             if result is None:
                 result = []
             self.result_ready.emit(result)
         except Exception as e:
             self.error.emit(str(e))
 
+class InfoWindow(QDialog):
+    def __init__(self, title, text, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setMinimumSize(500, 350)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowCloseButtonHint)
 
-class WizardMainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Spectrum & Temperature Data Analyzer")
+        layout = QVBoxLayout()
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
-        self.resize(700, 400) 
-        screen_geometry = QGuiApplication.primaryScreen().geometry()
-        x = (screen_geometry.width() - self.width()) // 2
-        y = (screen_geometry.height() - self.height()) // 2
-        self.move(x, y)
-
-        # self.showMaximized()
-
-        self.spectrum_list = None
-        self.temperature_list_raw = None
-        self.temperature_list_filtered = None
-        self.combined_list = None
-
-        self.spectrum_thread = None
-        self.temperature_thread = None
-
-        self.stack = QStackedWidget()
-        self.setCentralWidget(self.stack)
-
-        self._build_spectrum_page()
-        self._build_temperature_page()
-        self._build_combined_page()
-        
-        # Create Menu Bar
-        menu_bar = self.menuBar()
-
-        # ---- Help Menu ----
-        help_menu = menu_bar.addMenu("&Menu")
-
-        how_it_works_action = QAction("&How It Works", self)
-        how_it_works_action.triggered.connect(self._show_help)
-        help_menu.addAction(how_it_works_action)
-
-        credits_action = QAction("&Credits", self)
-        credits_action.triggered.connect(self._show_credits)
-        help_menu.addAction(credits_action)
-        
-    def _show_help(self):
-        QMessageBox.information(
-            self,
-            "How to Use This App",
-            "Step-by-Step Instructions:\n\n"
-            "1. Select the folder containing your OPUS files.\n"
-            "2. Click 'Process Spectrum Data' and wait for the process to finish.\n"
-            "3. Click 'Next,' then select your temperature data file (singular txt file)."
-            "4. Click 'Process Temperature Data' and wait for the process to finish.\n"
-            "5. Click 'Next' to combine the processed spectrum and temperature data.\n"
-            "6. Use the controls to choose which data to display from the pages and how it should be visualized.\n"
-            "7. Click 'Plot' to visualize the data in 3D or 2D plots.\n\n"
-            "Tips:\n"
-            "- Refer to Credits for information about used libraries."
-        )
-
-    def _show_credits(self):
-        credits_html = """
-        This application was built using the following libraries:<br>
-        <ul>
-            <li><a href="https://www.riverbankcomputing.com/software/pyqt/intro">PyQt6</a> (LGPL): GUI framework</li>
-            <li>Numpy (BSD): Numerical computations</li>
-            <li>Pandas (BSD): Data handling and CSV processing</li>
-            <li>Matplotlib (PSF): 2D plotting</li>
-            <li>Plotly (MIT): Interactive 2D and 3D plots</li>
-            <li><a href="https://github.com/spectrochempy/spectrochempy">SpectroChemPy</a> (CeCILL-B/C): OPUS file handling and spectroscopic data processing</li>
-        </ul>
-        <b>Developed by:</b> Dániel Vadon & Dr. Bálint Rubovszky
-        """
-        
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Credits")
-        msg.setTextFormat(Qt.TextFormat.RichText)  # allow HTML
-        msg.setText(credits_html)
-        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
-        msg.exec()
-
-    # ----------------------- Spectrum Page -----------------------
-    def _build_spectrum_page(self):
-        page = QWidget()
-        v = QVBoxLayout(page)
-
-        title = QLabel("""
-            <h3>
-                <span style="color:#2c7be5; font-weight:bold;">Spectrum</span> ›
-                <span style="color:gray;">Temperature</span> ›
-                <span style="color:gray;">Combined</span>
-            </h3>
-        """)
-        v.addWidget(title)
-
-        # Folder selector + process
-        h = QHBoxLayout()
-        self.spec_folder_label = QLineEdit()
-        self.spec_folder_label.setReadOnly(True)
-        self.spec_browse_btn = QPushButton("Browse Spectrum Folder")
-        self.spec_browse_btn.clicked.connect(self._browse_spectrum)
-        self.spec_process_btn = QPushButton("Process Spectrum Data")
-        self.spec_process_btn.clicked.connect(self._process_spectrum)
-        h.addWidget(self.spec_folder_label)
-        h.addWidget(self.spec_browse_btn)
-        h.addWidget(self.spec_process_btn)
-        v.addLayout(h)
-
-        # Progress bar
-        self.spec_progress = QProgressBar()
-        self.spec_progress.setFormat("%p%")
-        self.spec_progress.setTextVisible(True)
-        v.addWidget(self.spec_progress)
-
-        # General data label
-        self.spec_general_label = QLabel("")
-        self.spec_general_label.setVisible(False)
-        self.spec_general_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.spec_general_label.setStyleSheet("""
-            QLabel {
-                background-color: palette(highlight);
-                color: palette(highlighted-text);
-                padding: 3px;
-                border-radius: 4px;
-                font-weight: bold;
+        # QTextBrowser for rich text display
+        self.text_browser = QTextBrowser()
+        self.text_browser.setHtml(text)
+        self.text_browser.setOpenExternalLinks(True)
+        self.text_browser.setReadOnly(True)
+        self.text_browser.setFrameStyle(QTextBrowser.Shape.NoFrame)  # remove borders
+        self.text_browser.setStyleSheet("""
+            QTextBrowser {
+                border: none;
+                font-size: 12pt;
+                background: transparent;
             }
         """)
-        v.addWidget(self.spec_general_label)
+        layout.addWidget(self.text_browser)
 
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.setFixedWidth(90)
+        close_btn.clicked.connect(self.close)
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignRight)
 
-        # Table
-        self.spec_table = QTableWidget()
-        self.spec_table.setColumnCount(3)
-        self.spec_table.setHorizontalHeaderLabels(["File", "Datetime", "Abs Min–Max"])
-        self.spec_table.resizeColumnsToContents()
-        self.spec_table.horizontalHeader().setStretchLastSection(True)
-        v.addWidget(self.spec_table)
+        self.setLayout(layout)
 
-        # Plot controls
-        control_row = QHBoxLayout()
-        self.spec_start = QLineEdit("1")
-        self.spec_start.setValidator(QIntValidator())
-        self.spec_end = QLineEdit("-1")
-        self.spec_end.setValidator(QIntValidator())
-        self.spec_norm = QCheckBox("Normalize")
-        self.spec_interp = QCheckBox("Interpolate")
+class DataProcessingApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Spectrum & Temperature Data Processor")
+        self.setGeometry(150, 150, 720, 460)
 
-        control_row.addWidget(QLabel("Start:"))
-        control_row.addWidget(self.spec_start)
-        control_row.addWidget(QLabel("End:"))
-        control_row.addWidget(self.spec_end)
-        control_row.addWidget(self.spec_norm)
-        control_row.addWidget(self.spec_interp)
+        self.spectrum_list = []
+        self.temperature_list_filtered = []
+        self.combined_list = []
 
-        btn_plot_spec = QPushButton("Plot Spectrum")
-        btn_plot_spec.clicked.connect(self._plot_spectrum)
-        control_row.addWidget(btn_plot_spec)
+        self.spectrum_path = None
+        self.temp_file = None
 
-        v.addLayout(control_row)
+        # === Menu Bar ===
+        menubar = self.menuBar()
+        help_menu = menubar.addMenu("Help")
+        
+        # How To Use action
+        howto_action = help_menu.addAction("How To Use")
+        howto_action.setToolTip("Show instructions on how to use the application")
+        howto_action.triggered.connect(self.show_howto)
+        
+        # Credits action
+        credits_action = help_menu.addAction("Credits")
+        credits_action.setToolTip("Show credits and acknowledgments")
+        credits_action.triggered.connect(self.show_credits)
+        
+        # === Central Widget ===
+        central_widget = QWidget()
+        main_layout = QVBoxLayout()
 
-        # Navigation
-        nav = QHBoxLayout()
-        nav.addStretch()
-        self.btn_next_1 = QPushButton("Next →")
-        self.btn_next_1.setEnabled(False)  # enabled only after spectrum processed
-        self.btn_next_1.clicked.connect(lambda: self._goto_step(1))
-        nav.addWidget(self.btn_next_1)
-        v.addLayout(nav)
+        # === File Selection Section ===
+        file_group = QGroupBox("Data Selection")
+        file_layout = QVBoxLayout()
+        file_layout.setSpacing(10)
+        file_layout.setContentsMargins(12, 8, 12, 8)
 
-        self.stack.addWidget(page)
+        # Spectrum selection row
+        spec_layout = QHBoxLayout()
+        spec_layout.setSpacing(10)
+        self.spectrum_label = QLabel("No folder selected")
+        self.spectrum_label.setStyleSheet("color: gray;")
+        self.spectrum_btn = QPushButton("Browse")
+        self.spectrum_btn.setFixedWidth(100)
+        self.spectrum_btn.setToolTip("Select the folder containing spectrum files")
+        self.spectrum_btn.clicked.connect(self.select_spectrum_folder)
+        spec_layout.addWidget(QLabel("Spectrum:"))
+        spec_layout.addWidget(self.spectrum_label)
+        spec_layout.addStretch()
+        spec_layout.addWidget(self.spectrum_btn)
 
-    def _browse_spectrum(self):
-        folder = QFileDialog.getExistingDirectory(self, "Select Spectrum Data Folder")
+        # Temperature selection row
+        temp_layout = QHBoxLayout()
+        temp_layout.setSpacing(10)
+        self.temp_label = QLabel("No file selected")
+        self.temp_label.setStyleSheet("color: gray;")
+        self.temp_btn = QPushButton("Browse")
+        self.temp_btn.setFixedWidth(100)
+        self.temp_btn.setToolTip("Select the temperature data file")
+        self.temp_btn.clicked.connect(self.select_temp_file)
+        temp_layout.addWidget(QLabel("Temperature:"))
+        temp_layout.addWidget(self.temp_label)
+        temp_layout.addStretch()
+        temp_layout.addWidget(self.temp_btn)
+
+        # Combine rows
+        file_layout.addLayout(spec_layout)
+        file_layout.addLayout(temp_layout)
+        file_group.setLayout(file_layout)
+        main_layout.addWidget(file_group)
+
+        # === Processing Section ===
+        process_group = QGroupBox("Processing")
+        process_layout = QVBoxLayout()
+        process_layout.setSpacing(12)
+        process_layout.setContentsMargins(12, 8, 12, 8)
+
+        # Start Processing button
+        self.process_btn = QPushButton("Start Processing")
+        self.process_btn.setFixedWidth(140)
+        self.process_btn.setToolTip("Start processing spectrum and temperature data")
+        self.process_btn.clicked.connect(self.start_processing)
+        self.process_btn.setEnabled(False)
+        process_layout.addWidget(self.process_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # Helper function to create a progress row
+        def create_progress_row(label_text):
+            row = QHBoxLayout()
+            label = QLabel(label_text)
+            label.setFixedWidth(100)
+            progress = QProgressBar()
+            progress.setFormat("%p%")
+            row.addWidget(label)
+            row.addWidget(progress)
+            return row, progress
+
+        # Spectrum progress
+        spec_row, self.spec_progress = create_progress_row("Spectrum:")
+        process_layout.addLayout(spec_row)
+
+        # Temperature progress
+        temp_row, self.temp_progress = create_progress_row("Temperature:")
+        process_layout.addLayout(temp_row)
+
+        # Combine progress
+        comb_row, self.combine_progress = create_progress_row("Combine:")
+        process_layout.addLayout(comb_row)
+
+        process_group.setLayout(process_layout)
+        main_layout.addWidget(process_group)
+
+        # === 3D Plotting ===
+        vis_group = QGroupBox("3D Plotting")
+        vis_layout = QHBoxLayout()
+        vis_layout.setSpacing(10)
+        vis_layout.setContentsMargins(10, 6, 10, 6)
+
+        # Plot type
+        self.plot_type_dropdown = QComboBox()
+        self.plot_type_dropdown.addItems(["Surface", "Scatter"])
+        self.plot_type_dropdown.setFixedWidth(80)
+        self.plot_type_dropdown.setToolTip("Select the 3D plot type")
+
+        # Colormap
+        self.cmap_dropdown = QComboBox()
+        self.cmap_dropdown.addItems(["plasma", "viridis", "inferno", "cividis", "magma"])
+        self.cmap_dropdown.setFixedWidth(80)
+        self.cmap_dropdown.setToolTip("Select the color map for the plot")
+
+        # Smoothing
+        self.smoothing_input = QLineEdit()
+        self.smoothing_input.setPlaceholderText("Smoothing factor")
+        self.smoothing_input.setFixedWidth(110)
+        self.smoothing_input.setToolTip("Enter smoothing factor (optional)")
+
+        # Plot button
+        self.plot_btn = QPushButton("Plot 3D")
+        self.plot_btn.setFixedWidth(90)
+        self.plot_btn.clicked.connect(self._plot_3d)
+        self.plot_btn.setEnabled(False)
+
+        # Add widgets with labels
+        vis_layout.addWidget(QLabel("Type:"))
+        vis_layout.addWidget(self.plot_type_dropdown)
+        vis_layout.addSpacing(10)
+        vis_layout.addWidget(QLabel("Colormap:"))
+        vis_layout.addWidget(self.cmap_dropdown)
+        vis_layout.addSpacing(10)
+        vis_layout.addWidget(QLabel("Smoothing:"))
+        vis_layout.addWidget(self.smoothing_input)
+        vis_layout.addStretch()
+        vis_layout.addWidget(self.plot_btn)
+
+        vis_group.setLayout(vis_layout)
+        main_layout.addWidget(vis_group)
+
+        # === Peak Analysis ===
+        range_group = QGroupBox("Peak Analysis")
+        range_layout = QHBoxLayout()
+        range_layout.setSpacing(10)
+        range_layout.setContentsMargins(10, 6, 10, 6)
+        
+        # Wavelength range input
+        self.wavelength_range_input = QLineEdit()
+        self.wavelength_range_input.setPlaceholderText("950-1050, 2450-2550, 3050-3150")
+        self.wavelength_range_input.setToolTip("Enter range(s separated by commas). Example: 950-1050, 2450-2550")
+        
+        # Display Type
+        self.display_type_dropdown = QComboBox()
+        self.display_type_dropdown.addItems(["both", "raw", "smoothed"])
+        self.display_type_dropdown.setFixedWidth(80)
+        self.display_type_dropdown.setToolTip("Select how to plot")
+        
+        # Smoothing Method
+        self.smoothing_method_dropdown = QComboBox()
+        self.smoothing_method_dropdown.addItems(["gaussian", "loess", "spline", "boxcar", "none"])
+        self.smoothing_method_dropdown.setFixedWidth(80)
+        self.smoothing_method_dropdown.setToolTip("Select the method for smoothing")
+        
+        # Peak analysis button
+        self.range_btn = QPushButton("Peak Analysis")
+        self.range_btn.setFixedWidth(110)
+        self.range_btn.clicked.connect(self._plot_absorption)
+        self.range_btn.setEnabled(False)
+        
+        # Add widgets
+        range_layout.addWidget(QLabel("Range(s):"))
+        range_layout.addWidget(self.wavelength_range_input)
+        range_layout.addWidget(QLabel("Display:"))
+        range_layout.addWidget(self.display_type_dropdown)
+        range_layout.addWidget(QLabel("Method:"))
+        range_layout.addWidget(self.smoothing_method_dropdown)
+        range_layout.addWidget(self.range_btn)
+        
+        range_group.setLayout(range_layout)
+        main_layout.addWidget(range_group)
+        
+        central_widget.setLayout(main_layout)
+        self.setCentralWidget(central_widget)
+
+    def show_info(self, title, text):
+        self.info_win = InfoWindow(title, text)
+        self.info_win.show()
+        
+    # === Menu action methods ===
+    def show_howto(self):
+        self.show_info(
+            "How To Use",
+            """
+            <h2>How To Use</h2>
+            <ol>
+                <li>Select a <b>folder</b> containing <b>OPUS files</b> and a <b>Temperature file</b>.</li>
+                <li>Click <b>Start Processing</b> — Spectrum and Temperature will run in parallel, then Combine.</li>
+                <li>Use <b>Visualization</b> to plot 3D (Surface or Scatter, choose colormap, optional smoothing).</li>
+                <li>Use <b>Range Comparison</b> to enter ranges (e.g. <code>950-1050, 3050-3150</code>) and compare absorption.</li>
+            </ol>
+            """
+        )
+    
+    def show_credits(self):
+        self.show_info(
+            "Credits",
+            """
+            <h2>Credits</h2>
+            <p>This application was built using the following libraries:
+            <ul>
+                <li><a href="https://www.riverbankcomputing.com/software/pyqt/intro">PyQt6</a> (LGPL): GUI framework</li>
+                <li>Numpy (BSD): Numerical computations</li>
+                <li>Pandas (BSD): Data handling and CSV processing</li>
+                <li>Plotly (MIT): Interactive 3D plots</li>
+                <li><a href="https://github.com/spectrochempy/spectrochempy">SpectroChemPy</a> (CeCILL-B/C): OPUS file handling and spectroscopic data processing</li>
+            </ul>
+            <b>Developed by:</b> Dániel Vadon & Dr. Bálint Rubovszky</p>
+            """
+        )
+
+    # === Slots ===
+    def select_spectrum_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Spectrum Folder")
         if folder:
-            self.spec_folder_label.setText(folder)
+            self.spectrum_path = folder
+            self.spectrum_label.setText(f"{folder}")
+        self._update_start_enabled()
 
-    def _process_spectrum(self):
-        folder = self.spec_folder_label.text()
-        if not folder:
-            QMessageBox.warning(self, "No folder", "Please select a spectrum folder first.")
-            return
-        
-        # Clear previous data
-        self.spec_table.setRowCount(0)
-        self.btn_next_1.setEnabled(False)
-        self.spec_general_label.setVisible(False)
-        self.spec_progress.setVisible(True)
+    def select_temp_file(self):
+        file, _ = QFileDialog.getOpenFileName(self, "Select Temperature File", "", "CSV/TXT Files (*.csv *.txt);;All Files (*)")
+        if file:
+            self.temp_file = file
+            self.temp_label.setText(f"{file}")
+        self._update_start_enabled()
+
+    def _update_start_enabled(self):
+        self.process_btn.setEnabled(bool(self.spectrum_path and self.temp_file))
+
+    def start_processing(self):
+        # Reset progress bars
         self.spec_progress.setValue(0)
-        
-        self.spec_process_btn.setEnabled(False)
+        self.temp_progress.setValue(0)
+        self.combine_progress.setValue(0)
 
-        # start thread
-        self.spectrum_thread = ProcessingThread(process_spectrum_data, folder)
+        # Disable buttons until finished
+        self.process_btn.setEnabled(False)
+        self.plot_btn.setEnabled(False)
+        self.range_btn.setEnabled(False)
+
+        # Spectrum
+        self.spectrum_thread = ProcessingThread(process_spectrum_data, self.spectrum_path)
         self.spectrum_thread.progress_update.connect(self.spec_progress.setValue)
         self.spectrum_thread.result_ready.connect(self._on_spectrum_done)
         self.spectrum_thread.error.connect(self._on_error)
         self.spectrum_thread.start()
 
-    def _on_spectrum_done(self, result_list):
-        self.spec_process_btn.setEnabled(True)
-        self.spectrum_list = sorted(result_list or [], key=lambda e: e.get("timestamp", 0))
-        if not self.spectrum_list:
-            QMessageBox.warning(self, "Spectrum", "No spectrum data processed.")
-            self.btn_next_1.setEnabled(False)
-            return
-
-        row_count = len(self.spectrum_list)
-        self.spec_table.setRowCount(row_count)
-
-        abs_min_vals = []
-        abs_max_vals = []
-        wn_min_vals = []
-        wn_max_vals = []
-        timestamps = []
-
-        for i, entry in enumerate(self.spectrum_list):
-            # File name
-            file_name = os.path.basename(entry.get("file_path", ""))
-
-            # Timestamp / datetime
-            dt = entry.get("datetime") or entry.get("timestamp") or ""
-            if isinstance(entry.get("timestamp"), (int, float)):
-                timestamps.append(entry["timestamp"])
-
-            # Absorbance
-            arr = np.asarray(entry.get("absorbance", []))
-            if arr.size:
-                a_min = arr.min()
-                a_max = arr.max()
-                abs_min_vals.append(a_min)
-                abs_max_vals.append(a_max)
-                abs_text = f"{a_min:.4f}–{a_max:.4f}"
-            else:
-                abs_text = ""
-
-            # Wavenumbers
-            wn_array = np.asarray(entry.get("wavenumbers", []))
-            if wn_array.size:
-                wn_min_vals.append(wn_array.min())
-                wn_max_vals.append(wn_array.max())
-
-            # Populate table row
-            self.spec_table.setItem(i, 0, QTableWidgetItem(file_name))
-            self.spec_table.setItem(i, 1, QTableWidgetItem(str(dt)))
-            self.spec_table.setItem(i, 2, QTableWidgetItem(abs_text))
-
-        self.spec_table.resizeColumnsToContents()
-        self.btn_next_1.setEnabled(True)
-
-        # Unlock temperature processing if folder chosen
-        if getattr(self, 'temp_file_text', None):
-            try:
-                self.temp_process_btn.setEnabled(True)
-            except Exception:
-                pass
-
-        # Summary label
-        if abs_min_vals and abs_max_vals and wn_min_vals and wn_max_vals and timestamps:
-            spec_min = min(abs_min_vals)
-            spec_max = max(abs_max_vals)
-            wn_min = min(wn_min_vals)
-            wn_max = max(wn_max_vals)
-
-            general_data = (
-                f"Number of Files: {row_count} | "
-                f"Abs Range: {spec_min:.4f}–{spec_max:.4f} | "
-                f"Wavenumber Range: {wn_min:.2f}–{wn_max:.2f} cm⁻¹"
-            )
-
-            self.spec_progress.setVisible(False)
-            self.spec_general_label.setText(general_data)
-            self.spec_general_label.setVisible(True)
-
-    # ----------------------- Temperature Page -----------------------
-    def _build_temperature_page(self):
-        page = QWidget()
-        v = QVBoxLayout(page)
-
-        title = QLabel("""
-            <h3>
-                <span style="color:gray;">Spectrum</span> ›
-                <span style="color:#2c7be5; font-weight:bold;">Temperature</span> ›
-                <span style="color:gray;">Combined</span>
-            </h3>
-        """)
-        v.addWidget(title)
-
-        # Folder + process
-        h = QHBoxLayout()
-        self.temp_file_label = QLineEdit()
-        self.temp_file_label.setReadOnly(True)
-        btn_browse_temp = QPushButton("Browse Temperature File")
-        btn_browse_temp.clicked.connect(self._browse_temperature)
-        self.temp_process_btn = QPushButton("Process Temperature Data")
-        self.temp_process_btn.setEnabled(False)  # locked until spectrum processed
-        self.temp_process_btn.clicked.connect(self._process_temperature)
-        h.addWidget(self.temp_file_label)
-        h.addWidget(btn_browse_temp)
-        h.addWidget(self.temp_process_btn)
-        v.addLayout(h)
-
-        # Progress bar
-        self.temp_progress = QProgressBar()
-        self.temp_progress.setFormat("%p%")
-        self.temp_progress.setTextVisible(True)
-        v.addWidget(self.temp_progress)
-        
-        # General data label
-        self.temp_general_label = QLabel("")
-        self.temp_general_label.setVisible(False)
-        self.temp_general_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.temp_general_label.setStyleSheet("""
-            QLabel {
-                background-color: palette(highlight);
-                color: palette(highlighted-text);
-                padding: 3px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-        """)
-        v.addWidget(self.temp_general_label)
-
-        # Table
-        self.temp_table = QTableWidget()
-        self.temp_table.setColumnCount(2)
-        self.temp_table.setHorizontalHeaderLabels(["Datetime", "Temperature (K)"])
-        self.temp_table.resizeColumnsToContents()
-        self.temp_table.horizontalHeader().setStretchLastSection(True)
-        v.addWidget(self.temp_table)
-
-        # Plot controls
-        ctrl = QHBoxLayout()
-        self.temp_start = QLineEdit("1")
-        self.temp_start.setValidator(QIntValidator())
-        self.temp_end = QLineEdit("-1")
-        self.temp_end.setValidator(QIntValidator())
-        self.temp_smooth = QLineEdit("0")
-        self.temp_smooth.setValidator(QIntValidator())
-        self.temp_interp = QCheckBox("Interpolate")
-
-        ctrl.addWidget(QLabel("Start:"))
-        ctrl.addWidget(self.temp_start)
-        ctrl.addWidget(QLabel("End:"))
-        ctrl.addWidget(self.temp_end)
-        ctrl.addWidget(QLabel("Smooth:"))
-        ctrl.addWidget(self.temp_smooth)
-        ctrl.addWidget(self.temp_interp)
-
-        btn_plot_temp = QPushButton("Plot Temperature")
-        btn_plot_temp.clicked.connect(self._plot_temperature)
-        ctrl.addWidget(btn_plot_temp)
-        v.addLayout(ctrl)
-
-        # Navigation
-        nav = QHBoxLayout()
-        prev_btn = QPushButton("← Previous")
-        prev_btn.clicked.connect(lambda: self._goto_step(0))
-        nav.addWidget(prev_btn)
-        nav.addStretch()
-        self.btn_next_2 = QPushButton("Next →")
-        self.btn_next_2.setEnabled(False)
-        self.btn_next_2.clicked.connect(lambda: self._goto_step(2))
-        nav.addWidget(self.btn_next_2)
-        v.addLayout(nav)
-
-        self.stack.addWidget(page)
-
-    def _browse_temperature(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Temperature Data File",
-            "",
-            "Data Files (*.txt *.csv);;All Files (*)"
-        )
-        if file_path:
-            self.temp_file_label.setText(file_path)
-            self.temp_file_path = file_path
-            if self.spectrum_list:
-                self.temp_process_btn.setEnabled(True)
-
-    def _process_temperature(self):
-        file_path = self.temp_file_label.text()
-        if not file_path:
-            QMessageBox.warning(self, "No file", "Select a temperature file first.")
-            return
-        if not self.spectrum_list:
-            QMessageBox.warning(self, "Locked", "Temperature processing is locked until spectrum is processed.")
-            return
-
-        # Clear previous data
-        self.temp_table.setRowCount(0)
-        self.btn_next_2.setEnabled(False)
-        self.temp_progress.setValue(0)
-        self.temp_progress.setVisible(True)
-        self.temp_general_label.setVisible(False)
-        self.temp_process_btn.setEnabled(False)
-
-        # Start temperature processing thread
-        self.temperature_thread = ProcessingThread(process_temperature_data, file_path)
+        # Temperature
+        self.temperature_thread = ProcessingThread(process_temperature_data, self.temp_file)
         self.temperature_thread.progress_update.connect(self.temp_progress.setValue)
         self.temperature_thread.result_ready.connect(self._on_temperature_done)
         self.temperature_thread.error.connect(self._on_error)
         self.temperature_thread.start()
 
-    def _on_temperature_done(self, result_list):
-        self.temp_process_btn.setEnabled(True)
-        self.temperature_list_raw = result_list or []
-        if not self.temperature_list_raw:
-            QMessageBox.warning(self, "Temperature", "No temperature data processed.")
-            self.btn_next_2.setEnabled(False)
-            return
-        # Filter to spectrum timeframe
-        if self.spectrum_list:
-            first_spec_ts = self.spectrum_list[0]["timestamp"]
-            last_spec_ts = self.spectrum_list[-1]["timestamp"]
+    def _on_error(self, message: str):
+        QMessageBox.critical(self, "Processing error", message)
 
-            idx_before = idx_after = None
-            for i, entry in enumerate(self.temperature_list_raw):
-                ts = entry["timestamp"]
-                if ts <= first_spec_ts:
-                    idx_before = i
-                if idx_after is None and ts >= last_spec_ts:
-                    idx_after = i
-                    break
+    def _on_spectrum_done(self, result):
+        self.spectrum_list = result
+        self.spec_progress.setValue(100)
+        self._combine_data()
 
-            if idx_before is not None and idx_after is not None and idx_after >= idx_before:
-                self.temperature_list_filtered = (
-                    [self.temperature_list_raw[idx_before]]
-                    + self.temperature_list_raw[idx_before + 1:idx_after]
-                    + ([self.temperature_list_raw[idx_after]] if idx_after != idx_before else [])
-                )
-            else:
-                self.temperature_list_filtered = self.temperature_list_raw
-        else:
-            self.temperature_list_filtered = self.temperature_list_raw
+    def _on_temperature_done(self, result):
+        self.temperature_list_filtered = result
+        self.temp_progress.setValue(100)
+        self._combine_data()
 
-        # Populate table + compute min/max
-        row_count = len(self.temperature_list_filtered)
-        self.temp_table.setRowCount(row_count)
-
-        min_temp = float("inf")
-        max_temp = float("-inf")
-
-        for i, entry in enumerate(self.temperature_list_filtered):
-            ts = entry.get("timestamp")
-            dt_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S') if ts else "Not Available"
-            temp = entry.get("temperature", "")
-
-            if isinstance(temp, (int, float)):
-                min_temp = min(min_temp, temp)
-                max_temp = max(max_temp, temp)
-                temp_str = f"{temp:.4f}"
-            else:
-                temp_str = str(temp)
-
-            self.temp_table.setItem(i, 0, QTableWidgetItem(dt_str))
-            self.temp_table.setItem(i, 1, QTableWidgetItem(temp_str))
-
-        self.temp_table.resizeColumnsToContents()
-
-        # Display general data
-        if min_temp != float("inf"):
-            general_data = f"Min Temp: {min_temp:.4f} K | Max Temp: {max_temp:.4f} K"
-            self.temp_general_label.setText(general_data)
-            self.temp_general_label.setVisible(True)
-
-        self.temp_progress.setVisible(False)
-        self.btn_next_2.setEnabled(True)
-
-    # ----------------------- Combined Page -----------------------
-    def _build_combined_page(self):
-        page = QWidget()
-        v = QVBoxLayout(page)
-
-        title = QLabel("""
-            <h3>
-                <span style="color:gray;">Spectrum</span> ›
-                <span style="color:gray;">Temperature</span> ›
-                <span style="color:#2c7be5; font-weight:bold;">Combined</span>
-            </h3>
-        """)
-        v.addWidget(title)
-
-        # Summary label
-        self.combined_summary_label = QLabel("")
-        self.combined_summary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.combined_summary_label.setStyleSheet("""
-            QLabel {
-                background-color: palette(highlight);
-                color: palette(highlighted-text);
-                padding: 3px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-        """)
-        v.addWidget(self.combined_summary_label)
-
-        self.combined_table = QTableWidget()
-        self.combined_table.setColumnCount(3)
-        self.combined_table.setHorizontalHeaderLabels(["Datetime", "Temperature (K)", "Abs Min–Max"])
-        self.combined_table.resizeColumnsToContents()
-        self.combined_table.horizontalHeader().setStretchLastSection(True)
-        v.addWidget(self.combined_table)
-
-        # Create a horizontal layout for the 3D plot controls
-        h3d_layout = QHBoxLayout()
-
-        # Smoothing input for 3D plot
-        self.smoothing_input = QLineEdit()
-        self.smoothing_input.setPlaceholderText("Enter temperature smoothing factor (can improve performance)")
-        h3d_layout.addWidget(self.smoothing_input)
-        
-        # Plot type dropdown
-        self.plot_type_dropdown = QComboBox()
-        self.plot_type_dropdown.addItems(["Surface", "Scatter"])
-        h3d_layout.addWidget(QLabel("Plot Type:"))
-        h3d_layout.addWidget(self.plot_type_dropdown)
-
-        # Colormap dropdown for 3D plot
-        self.cmap_dropdown = QComboBox()
-        colormaps = ['plasma', 'viridis', 'inferno', 'cividis', 'magma']
-        self.cmap_dropdown.addItems(colormaps)
-        h3d_layout.addWidget(QLabel("Select Colormap:"))
-        h3d_layout.addWidget(self.cmap_dropdown)
-
-        btn_plot_3d = QPushButton("Plot 3D")
-        btn_plot_3d.clicked.connect(self._plot_3d)
-        h3d_layout.addWidget(btn_plot_3d)
-
-        v.addLayout(h3d_layout)
-
-        # Create a horizontal layout for the absorption plot controls
-        habs_layout = QHBoxLayout()
-
-        # Range selection for wavelengths
-        self.wavelength_range_input = QLineEdit()
-        self.wavelength_range_input.setPlaceholderText("Enter wavelength range(s) (e.g., 900-1000, 3100-3200)")
-        habs_layout.addWidget(self.wavelength_range_input)
-
-        btn_plot_absorption = QPushButton("Plot Peak Analysis")
-        btn_plot_absorption.clicked.connect(self._plot_absorption)
-        habs_layout.addWidget(btn_plot_absorption)
-
-        v.addLayout(habs_layout)
-
-        # Navigation buttons
-        nav = QHBoxLayout()
-        prev_btn = QPushButton("← Previous")
-        prev_btn.clicked.connect(lambda: self._goto_step(1))
-        nav.addWidget(prev_btn)
-        nav.addStretch()
-        v.addLayout(nav)
-
-        self.stack.addWidget(page)
-
-    def _goto_step(self, idx: int):
-        self.stack.setCurrentIndex(idx)
-        if idx == 2:
-            self._combine()
-
-    def _combine(self):
+    def _combine_data(self):
         if not self.spectrum_list or not self.temperature_list_filtered:
-            QMessageBox.warning(self, "Combine", "Need both spectrum and temperature data to combine.")
             return
 
         try:
@@ -645,132 +395,20 @@ class WizardMainWindow(QMainWindow):
                 self.spectrum_list,
                 time_buffer=10
             ) or []
+            self.combine_progress.setValue(100)
         except Exception as e:
             QMessageBox.critical(self, "Combine error", str(e))
             self.combined_list = []
 
         if not self.combined_list:
             QMessageBox.information(self, "Combine", "No combined entries.")
-            self.combined_table.setRowCount(0)
-            self.combined_summary_label.setText("No combined data available.")
-            return
+        else:
+            # Enable visualization buttons
+            self.plot_btn.setEnabled(True)
+            self.range_btn.setEnabled(True)
 
-        row_count = len(self.combined_list)
-        self.combined_table.setRowCount(row_count)
-
-        # Running min/max trackers
-        abs_min = float("inf")
-        abs_max = float("-inf")
-        temp_min = float("inf")
-        temp_max = float("-inf")
-        wn_min = float("inf")
-        wn_max = float("-inf")
-        timestamps = []
-
-        # Fill table + compute all stats
-        for i, c in enumerate(self.combined_list):
-            dt = c.get("datetime") or c.get("timestamp") or ""
-            temp = c.get("temperature", "")
-
-            # Absorbance
-            arr = np.asarray(c.get("absorbance", []))
-            if arr.size:
-                a_min = arr.min()
-                a_max = arr.max()
-                abs_min = min(abs_min, a_min)
-                abs_max = max(abs_max, a_max)
-                abs_text = f"{a_min:.4f}–{a_max:.4f}"
-            else:
-                abs_text = ""
-
-            # Temperature
-            if isinstance(temp, (int, float)):
-                temp_min = min(temp_min, temp)
-                temp_max = max(temp_max, temp)
-
-            # Wavenumbers
-            wn_array = np.asarray(c.get("wavenumbers", []))
-            if wn_array.size:
-                wn_min = min(wn_min, wn_array.min())
-                wn_max = max(wn_max, wn_array.max())
-
-            # Timestamps
-            if isinstance(c.get("timestamp"), (int, float)):
-                timestamps.append(c["timestamp"])
-
-            # Table row
-            self.combined_table.setItem(i, 0, QTableWidgetItem(str(dt)))
-            self.combined_table.setItem(
-                i, 1, QTableWidgetItem(f"{temp:.4f}" if isinstance(temp, (int, float)) else str(temp))
-            )
-            self.combined_table.setItem(i, 2, QTableWidgetItem(abs_text))
-
-        self.combined_table.resizeColumnsToContents()
-        self.combined_table.horizontalHeader().setStretchLastSection(True)
-
-        # Summary string
-        summary_str = (
-            f"Abs Range: {abs_min:.4f}–{abs_max:.4f} | "
-            f"Temp Range: {temp_min:.4f}–{temp_max:.4f} K | "
-            f"Wavenumber Range: {wn_min:.2f}–{wn_max:.2f} cm⁻¹"
-        )
-
-        self.combined_summary_label.setText(summary_str)
-
-    # ----------------------- Plot helpers -----------------------
-    def _plot_spectrum(self):
-        if not self.spectrum_list:
-            QMessageBox.warning(self, "Plot", "No spectrum data.")
-            return
-        try:
-            start = int(self.spec_start.text())
-        except Exception:
-            start = 1
-        try:
-            end = int(self.spec_end.text())
-        except Exception:
-            end = -1
-
-        data = interpolate_spectrum_data(self.spectrum_list) if self.spec_interp.isChecked() else self.spectrum_list
-
-        plot_spectra(
-            data,
-            start_index=start,
-            end_index=end,
-            normalize=self.spec_norm.isChecked(),
-            progress_callback=lambda *a, **k: None,
-            index_offset=True
-        )
-
-    def _plot_temperature(self):
-        if not self.temperature_list_filtered:
-            QMessageBox.warning(self, "Plot", "No temperature data.")
-            return
-        try:
-            start = int(self.temp_start.text())
-        except Exception:
-            start = 1
-        try:
-            end = int(self.temp_end.text())
-        except Exception:
-            end = -1
-        try:
-            win = int(self.temp_smooth.text())
-        except Exception:
-            win = 0
-        
-        inter = self.temp_interp.checkState() == Qt.CheckState.Checked
-        data = interpolate_to_round_seconds(self.temperature_list_filtered) if inter else self.temperature_list_filtered
-
-        plot_temperature(
-            data,
-            start_index=start,
-            end_index=end,
-            smooth=(win != 0),
-            window_size=win,
-            progress_callback=lambda *a, **k: None,
-            index_offset=True
-        )
+        # Re-enable processing start if inputs are still valid
+        self._update_start_enabled()
 
     def show_3d_plot_window(self, combined_data, plot_type="Surface", cmap='plasma', max_points=2_000_000):
         if not combined_data or not isinstance(combined_data, list) or not isinstance(combined_data[0], dict):
@@ -779,8 +417,10 @@ class WizardMainWindow(QMainWindow):
 
         # Convert to arrays
         wavenumbers = np.asarray(combined_data[0]["wavenumbers"])
-        temperatures = np.asarray([entry["temperature"] for entry in combined_data])
-        absorbances = np.asarray([entry["absorbance"] for entry in combined_data])
+        temperatures = np.asarray([entry["temperature"]
+                                  for entry in combined_data])
+        absorbances = np.asarray([entry["absorbance"]
+                                 for entry in combined_data])
 
         # Downsample if too big
         M, N = absorbances.shape
@@ -794,7 +434,8 @@ class WizardMainWindow(QMainWindow):
         # Create Plotly figure depending on type
         if plot_type == "Surface":
             fig = go.Figure(data=[
-                go.Surface(z=absorbances, x=wavenumbers, y=temperatures, colorscale=cmap)
+                go.Surface(z=absorbances, x=wavenumbers,
+                           y=temperatures, colorscale=cmap)
             ])
         elif plot_type == "Scatter":
             # Flatten arrays for scatter plot
@@ -805,10 +446,11 @@ class WizardMainWindow(QMainWindow):
                     y=T.flatten(),
                     z=absorbances.flatten(),
                     mode="markers",
-                    marker=dict(size=2, color=absorbances.flatten(), colorscale=cmap)
+                    marker=dict(size=2, color=absorbances.flatten(),
+                                colorscale=cmap)
                 )
             ])
-        
+
         fig.update_layout(title=f"3D Absorbance {plot_type} Plot")
         fig.update_layout(
             scene=dict(
@@ -830,7 +472,7 @@ class WizardMainWindow(QMainWindow):
         layout = QVBoxLayout(central_widget)
         view = QWebEngineView()
         view.setUrl(QUrl.fromLocalFile(tmp_html))
-        
+
         def on_load_finished(ok):
             if ok:
                 view.resize(view.width() + 1, view.height() + 1)
@@ -847,9 +489,9 @@ class WizardMainWindow(QMainWindow):
         if not self.combined_list:
             QMessageBox.warning(self, "Plot 3D", "No combined data to plot.")
             return
-        
+
         data_to_plot = self.combined_list
-        
+
         if self.smoothing_input.text() and int(self.smoothing_input.text()) != 0:
             try:
                 temp_window = float(self.smoothing_input.text()) / 10
@@ -860,7 +502,7 @@ class WizardMainWindow(QMainWindow):
 
         cmap = self.cmap_dropdown.currentText()
         plot_type = self.plot_type_dropdown.currentText()
-    
+
         self.surface_window = self.show_3d_plot_window(data_to_plot, plot_type=plot_type, cmap=cmap)
 
     def _plot_absorption(self):
@@ -881,26 +523,22 @@ class WizardMainWindow(QMainWindow):
         except ValueError:
             QMessageBox.warning(self, "Peak Analysis", "Invalid format. Use e.g. 950-1050, 3050-3150")
             return
+        
+        display_type = self.display_type_dropdown.currentText()
+        smoothing_method = self.smoothing_method_dropdown.currentText()
 
         plot_absorption_vs_temperature(
             self.combined_list,
             ranges,
-            smooth=True,
-            window_size=float(self.smoothing_input.text()) if self.smoothing_input.text() else 5.0
+            display_type = display_type,
+            smoothing = smoothing_method
         )
-
-    # ----------------------- Error handler -----------------------
-    def _on_error(self, msg):
-        QMessageBox.critical(self, "Processing Error", msg)
-        self.spec_process_btn.setEnabled(True)
-        self.temp_process_btn.setEnabled(True)
-
 
 # ---------------------- Launch ----------------------
 
 def launch_app():
     app = QApplication(sys.argv)
-    win = WizardMainWindow()
+    win = DataProcessingApp()
     win.show()
     sys.exit(app.exec())
 
