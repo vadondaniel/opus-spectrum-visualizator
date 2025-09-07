@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.interpolate import UnivariateSpline
+from scipy.interpolate import InterpolatedUnivariateSpline
 
 def plot_spectra(
         spectra_data, start_index=0, end_index=10,
@@ -173,7 +175,7 @@ def plot_temperature(
         if window_size > len(temperatures):
             raise ValueError(
                 "Window size must be less than or equal to the length of the data.")
-        temperatures = moving_average(temperatures, window_size)
+        temperatures = _moving_average(temperatures, window_size)
         # Adjust time_numeric to match the smoothed data length
         time_numeric = time_numeric[window_size - 1:]
 
@@ -218,6 +220,17 @@ def plot_3d_surface(combined_data, cmap='plasma'):
     plt.tight_layout()
     plt.show()
 
+# ---------- helper to estimate gaussian bandwidth (Silverman-like) ----------
+def estimate_bandwidth(temperatures):
+    """Estimate a 1D bandwidth (K) from temperature array using Silverman's rule of thumb."""
+    x = np.asarray(temperatures, dtype=float)
+    n = len(x)
+    if n < 2:
+        return 1.0
+    sd = np.std(x, ddof=1)
+    # Silverman: 1.06 * sd * n^(-1/5)
+    return float(1.06 * sd * n ** (-1/5))
+
 def plot_absorption_vs_temperature(
     combined_list,
     wavelength_ranges,
@@ -225,7 +238,7 @@ def plot_absorption_vs_temperature(
     display_type="both",
     smoothing="gaussian",         # "boxcar", "gaussian", "loess", "spline", or "none"
     smoothing_param=None,         # boxcar/gaussian: bandwidth in K; loess: frac (0..1); spline: s
-    eval_on_grid=False,           # if True, evaluate smoothed curve on a dense grid for prettier lines
+    eval_on_grid=True,            # if True, evaluate smoothed curve on a dense grid for prettier lines
     grid_points=300
 ):
     """
@@ -283,7 +296,7 @@ def plot_absorption_vs_temperature(
                 marker=marker,
                 linestyle='-',
                 color=color,
-                label=f"{start_wavelength}-{end_wavelength} raw"
+                label=f"{start_wavelength}-{end_wavelength}"
             )
 
         if display_type in ("smoothed", "both") and smoothing != "none":
@@ -312,27 +325,34 @@ def plot_absorption_vs_temperature(
                                         degree=1, x_eval=x_eval)
 
             elif smoothing == "spline":
-                from scipy.interpolate import UnivariateSpline
-                strength = float(smoothing_param) if smoothing_param is not None else 0.2
-                # scale relative to data size and variance
-                base_scale = len(temperatures) * np.var(summed_absorbance)
-                s_val = max(1e-8, strength * base_scale)  # avoid s=0
-                spl = UnivariateSpline(temperatures, summed_absorbance, s=s_val, k=3)
+                # Ensure strength in 0–1
+                strength = float(smoothing_param) if smoothing_param is not None else 0.5
+                strength = np.clip(strength, 0.0, 1.0)
+
                 x_eval = T_grid if eval_on_grid else temperatures
-                smoothed = spl(x_eval)
+                smoothed = _spline_safe_normalized(temperatures, summed_absorbance, x_eval, strength)
 
             else:
-                smoothed = None  # nothing
+                smoothed = None
 
             if smoothed is not None:
-                plt.plot(
-                    x_eval,
-                    smoothed,
-                    linestyle='--',
-                    linewidth=2,
-                    color=color,
-                    label=f"{start_wavelength}-{end_wavelength} {smoothing}"
-                )
+                if display_type == "smoothed":
+                    plt.plot(
+                        x_eval,
+                        smoothed,
+                        linestyle='--',
+                        linewidth=2,
+                        color=color,
+                        label=f"{start_wavelength}-{end_wavelength}"
+                    )
+                else:
+                    plt.plot(
+                        x_eval,
+                        smoothed,
+                        linestyle='--',
+                        linewidth=2,
+                        color=color,
+                    )
 
     plt.xlabel("Temperature (K)")
     plt.ylabel("Integrated Absorbance (Area under curve)")
@@ -350,7 +370,44 @@ def plot_absorption_vs_temperature(
     plt.tight_layout()
     plt.show()
 
-def moving_average(data, window_size):
+def _spline_safe_normalized(x, y, x_eval, strength=0.5):
+    """
+    Spline smoothing with normalized y to make 0-1 slider perceptually linear across datasets.
+    
+    Parameters
+    ----------
+    x : array-like
+        Independent variable
+    y : array-like
+        Dependent variable
+    x_eval : array-like
+        Points to evaluate the spline at
+    strength : float
+        0-1 slider; 0 = minimal smoothing, 1 = maximal smoothing
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+
+    # Normalize y to [0,1]
+    y_min, y_max = np.min(y), np.max(y)
+    if y_max - y_min > 0:
+        y_norm = (y - y_min) / (y_max - y_min)
+    else:
+        y_norm = y - y_min  # constant array
+
+    # Spline smoothing: s = s_min + strength * s_max
+    s_min = 1e-12
+    s_max = np.sum((y_norm - np.mean(y_norm))**2)
+    s_val = s_min + strength * (s_max - s_min)
+
+    spline = UnivariateSpline(x, y_norm, s=s_val)
+    y_smooth_norm = spline(x_eval)
+
+    # Rescale back to original range
+    y_smooth = y_smooth_norm * (y_max - y_min) + y_min
+    return y_smooth
+
+def _moving_average(data, window_size):
     """Calculate the moving average of the data."""
     return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
 

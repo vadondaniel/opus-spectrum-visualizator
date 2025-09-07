@@ -7,7 +7,7 @@ import numpy as np
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QFileDialog, QProgressBar, QLineEdit, QDialog,
-    QMessageBox, QComboBox, QGroupBox, QTextBrowser, QDoubleSpinBox
+    QMessageBox, QComboBox, QGroupBox, QTextBrowser, QDoubleSpinBox, QGridLayout, QSpacerItem, QSizePolicy
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
 from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -19,7 +19,7 @@ from data_processing.temperature import process_temperature_data
 from data_processing.combined_data import (
     combine_temperature_and_spectrum_data, smooth_combined_by_temperature
 )
-from utils.plot import plot_absorption_vs_temperature
+from utils.plot import estimate_bandwidth, plot_absorption_vs_temperature
 
 # === Worker Thread Wrapper ===
 class ProcessingThread(QThread):
@@ -251,59 +251,68 @@ class DataProcessingApp(QMainWindow):
 
         # === Peak Analysis ===
         peak_group = QGroupBox("Peak Analysis")
-        peak_layout = QHBoxLayout()
-        peak_layout.setSpacing(10)
-        peak_layout.setContentsMargins(10, 6, 10, 6)
-        
-        # Wavelength range input
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+        grid.setContentsMargins(10, 6, 10, 6)
+
+        # Row 0: Ranges (full width)
         self.wavelength_range_input = QLineEdit()
-        self.wavelength_range_input.setPlaceholderText("950-1050, 2450-2550, 3050-3150")
-        self.wavelength_range_input.setToolTip("Enter range(s separated by commas). Example: 950-1050, 2450-2550")
-        
-        # Display Type
+        self.wavelength_range_input.setPlaceholderText("950-1050, 2450-2550, 3050-3150, ...")
+        self.wavelength_range_input.setToolTip("Enter range(s) separated by commas. Example: 950-1050, 2450-2550")
+        grid.addWidget(QLabel("Range(s):"), 0, 0)
+        grid.addWidget(self.wavelength_range_input, 0, 1, 1, 7)
+
+        # Row 1: Display / Method / Param / Button
         self.display_type_dropdown = QComboBox()
-        self.display_type_dropdown.addItems(["both", "raw", "smoothed"])
-        self.display_type_dropdown.setFixedWidth(80)
+        self.display_type_dropdown.addItems(["Both", "Raw", "Smoothed"])
         self.display_type_dropdown.setToolTip("Select how to plot")
-        
-        # Smoothing Method
+        self.display_type_dropdown.setFixedWidth(100)
+
+        self.smoothing_method_label = QLabel("Smoothing Method:")
         self.smoothing_method_dropdown = QComboBox()
         self.smoothing_method_dropdown.addItems(["gaussian", "loess", "spline", "boxcar"])
-        self.smoothing_method_dropdown.setFixedWidth(80)
-        self.smoothing_method_dropdown.setToolTip("Select the method for smoothing")
-        
-        # Smoothing parameter widgets
+        self.smoothing_method_dropdown.setToolTip("Select the method of smoothing")
+        self.smoothing_method_dropdown.setFixedWidth(110)
+
+        self.smoothing_param_label = QLabel("Param:")
         self.smoothing_param_spin = QDoubleSpinBox()
         self.smoothing_param_spin.setDecimals(3)
-        self.smoothing_param_spin.setRange(0.001, 1e6)
+        self.smoothing_param_spin.setRange(0.0, 1e6)
         self.smoothing_param_spin.setSingleStep(0.1)
-        self.smoothing_param_spin.setValue(5.0)  # default
-        self.smoothing_param_spin.setFixedWidth(100)
-        
-        self.smoothing_param_label = QLabel("Param:")
-        
-        # Peak analysis button
+        self.smoothing_param_spin.setValue(5.0)
+        self.smoothing_param_spin.setFixedWidth(110)
+
         self.peak_btn = QPushButton("Peak Analysis")
-        self.peak_btn.setFixedWidth(110)
+        self.peak_btn.setFixedWidth(120)
         self.peak_btn.clicked.connect(self._plot_absorption)
         self.peak_btn.setEnabled(False)
+
+        # place them in the grid
+        grid.addWidget(QLabel("Display:"), 1, 0)
+        grid.addWidget(self.display_type_dropdown, 1, 1)
+
+        grid.addWidget(self.smoothing_method_label, 1, 2)
+        grid.addWidget(self.smoothing_method_dropdown, 1, 3)
+
+        grid.addWidget(self.smoothing_param_label, 1, 4)
+        grid.addWidget(self.smoothing_param_spin, 1, 5)
         
-        # Add widgets
-        peak_layout.addWidget(QLabel("Range(s):"))
-        peak_layout.addWidget(self.wavelength_range_input)
-        peak_layout.addWidget(QLabel("Display:"))
-        peak_layout.addWidget(self.display_type_dropdown)
-        peak_layout.addWidget(QLabel("Method:"))
-        peak_layout.addWidget(self.smoothing_method_dropdown)
-        peak_layout.addWidget(self.smoothing_param_label)
-        peak_layout.addWidget(self.smoothing_param_spin)
-        peak_layout.addWidget(self.peak_btn)
-        
-        peak_group.setLayout(peak_layout)
+        # Add a spacer before the button
+        spacer = QSpacerItem(1, 1, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        grid.addItem(spacer, 1, 6)
+
+        grid.addWidget(self.peak_btn, 1, 7)
+
+        peak_group.setLayout(grid)
         main_layout.addWidget(peak_group)
-        
+
+        # connect UI changes
         self.smoothing_method_dropdown.currentTextChanged.connect(self._update_smoothing_param_ui)
+        self.display_type_dropdown.currentTextChanged.connect(self._on_display_changed)
+        # initialize visibility/ranges
         self._update_smoothing_param_ui(self.smoothing_method_dropdown.currentText())
+        self._on_display_changed(self.display_type_dropdown.currentText())
         
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
@@ -501,34 +510,49 @@ class DataProcessingApp(QMainWindow):
         return win
 
     def _update_smoothing_param_ui(self, method: str):
+        """Adjust label, ranges and defaults for the smoothing parameter depending on method."""
+        method = method.lower()
+        
         if method == "gaussian":
             self.smoothing_param_label.setText("Bandwidth (K):")
-            self.smoothing_param_spin.setRange(0.1, 1e4)
-            self.smoothing_param_spin.setValue(5.0)
-            self.smoothing_param_spin.setVisible(True)
-            self.smoothing_param_label.setVisible(True)
+            self.smoothing_param_spin.setRange(0.01, 1e5)
+            self.smoothing_param_spin.setValue(estimate_bandwidth([e["temperature"] for e in self.combined_list])
+                                               if self.combined_list else 5.0)
+            self.smoothing_param_spin.setToolTip("Set the level of smoothing")
+
         elif method == "loess":
             self.smoothing_param_label.setText("Frac (0–1):")
             self.smoothing_param_spin.setRange(0.01, 1.0)
+            self.smoothing_param_spin.setSingleStep(0.01)
+            self.smoothing_param_spin.setToolTip("Set the level of smoothing")
             self.smoothing_param_spin.setValue(0.25)
-            self.smoothing_param_spin.setVisible(True)
-            self.smoothing_param_label.setVisible(True)
+
         elif method == "spline":
             self.smoothing_param_label.setText("Strength (0–1):")
             self.smoothing_param_spin.setRange(0.0, 1.0)
+            self.smoothing_param_spin.setSingleStep(0.01)
+            self.smoothing_param_spin.setToolTip("Set the level of smoothing (scale can be inconsistent between datasets of varying variances)")
             self.smoothing_param_spin.setValue(0.2)
-            self.smoothing_param_spin.setVisible(True)
-            self.smoothing_param_label.setVisible(True)
+
         elif method == "boxcar":
             self.smoothing_param_label.setText("Window (K):")
-            self.smoothing_param_spin.setRange(0.1, 1e4)
+            self.smoothing_param_spin.setRange(0.01, 1e5)
+            self.smoothing_param_spin.setSingleStep(0.5)
+            self.smoothing_param_spin.setToolTip("Set the range the moving average should use for smoothing")
             self.smoothing_param_spin.setValue(5.0)
-            self.smoothing_param_spin.setVisible(True)
-            self.smoothing_param_label.setVisible(True)
-        else:
-            # "none"
+
+    def _on_display_changed(self, display_text: str):
+        """If user chooses 'raw' hide smoothing param since it won't be applied."""
+        if display_text == "raw":
             self.smoothing_param_spin.setVisible(False)
             self.smoothing_param_label.setVisible(False)
+            self.smoothing_method_dropdown.setVisible(False)
+            self.smoothing_method_label.setVisible(False)
+        else:
+            self.smoothing_param_spin.setVisible(True)
+            self.smoothing_param_label.setVisible(True)
+            self.smoothing_method_dropdown.setVisible(True)
+            self.smoothing_method_label.setVisible(True)
 
     def _plot_3d(self):
         if not self.combined_list:
@@ -555,36 +579,43 @@ class DataProcessingApp(QMainWindow):
             QMessageBox.warning(self, "Peak Analysis", "No combined data to plot.")
             return
 
-        wavelength_ranges = self.wavelength_range_input.text()
-        if not wavelength_ranges:
+        s = self.wavelength_range_input.text().strip()
+        if not s:
             QMessageBox.warning(self, "Peak Analysis", "Please enter one or more wavelength ranges.")
             return
 
         try:
             ranges = []
-            for part in wavelength_ranges.split(","):
-                start, end = map(float, part.strip().split('-'))
+            for part in s.split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                start_str, end_str = part.replace(" ", "").split("-")
+                start, end = float(start_str), float(end_str)
                 ranges.append((start, end))
-        except ValueError:
+        except Exception:
             QMessageBox.warning(self, "Peak Analysis", "Invalid format. Use e.g. 950-1050, 3050-3150")
             return
-        
-        display_type = self.display_type_dropdown.currentText()
-        smoothing_method = self.smoothing_method_dropdown.currentText()
-        
+
+        display_type = self.display_type_dropdown.currentText().lower()
+        smoothing_method = self.smoothing_method_dropdown.currentText().lower()
         smoothing_param = None
-        if smoothing_method != "none":
+        if display_type != "raw":
             smoothing_param = float(self.smoothing_param_spin.value())
 
-        plot_absorption_vs_temperature(
-            self.combined_list,
-            ranges,
-            display_type=display_type,
-            smoothing=smoothing_method,
-            smoothing_param=smoothing_param,
-            eval_on_grid=True
-        )
-
+        try:
+            plot_absorption_vs_temperature(
+                self.combined_list,
+                ranges,
+                display_type=display_type,
+                smoothing=smoothing_method,
+                smoothing_param=smoothing_param,
+                eval_on_grid=True,
+                grid_points=400
+            )
+        except Exception as exc:
+            QMessageBox.warning(self, "Plot error", f"Error while plotting: {exc}")
+            
 # ---------------------- Launch ----------------------
 
 def launch_app():
