@@ -7,7 +7,7 @@ import numpy as np
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QFileDialog, QProgressBar, QLineEdit, QDialog,
-    QMessageBox, QComboBox, QGroupBox, QTextBrowser
+    QMessageBox, QComboBox, QGroupBox, QTextBrowser, QDoubleSpinBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
 from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -268,9 +268,19 @@ class DataProcessingApp(QMainWindow):
         
         # Smoothing Method
         self.smoothing_method_dropdown = QComboBox()
-        self.smoothing_method_dropdown.addItems(["gaussian", "loess", "spline", "boxcar", "none"])
+        self.smoothing_method_dropdown.addItems(["gaussian", "loess", "spline", "boxcar"])
         self.smoothing_method_dropdown.setFixedWidth(80)
         self.smoothing_method_dropdown.setToolTip("Select the method for smoothing")
+        
+        # Smoothing parameter widgets
+        self.smoothing_param_spin = QDoubleSpinBox()
+        self.smoothing_param_spin.setDecimals(3)
+        self.smoothing_param_spin.setRange(0.001, 1e6)
+        self.smoothing_param_spin.setSingleStep(0.1)
+        self.smoothing_param_spin.setValue(5.0)  # default
+        self.smoothing_param_spin.setFixedWidth(100)
+        
+        self.smoothing_param_label = QLabel("Param:")
         
         # Peak analysis button
         self.range_btn = QPushButton("Peak Analysis")
@@ -285,10 +295,15 @@ class DataProcessingApp(QMainWindow):
         range_layout.addWidget(self.display_type_dropdown)
         range_layout.addWidget(QLabel("Method:"))
         range_layout.addWidget(self.smoothing_method_dropdown)
+        range_layout.addWidget(self.smoothing_param_label)
+        range_layout.addWidget(self.smoothing_param_spin)
         range_layout.addWidget(self.range_btn)
         
         range_group.setLayout(range_layout)
         main_layout.addWidget(range_group)
+        
+        self.smoothing_method_dropdown.currentTextChanged.connect(self._update_smoothing_param_ui)
+        self._update_smoothing_param_ui(self.smoothing_method_dropdown.currentText())
         
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
@@ -485,6 +500,36 @@ class DataProcessingApp(QMainWindow):
         win.show()
         return win
 
+    def _update_smoothing_param_ui(self, method: str):
+        if method == "gaussian":
+            self.smoothing_param_label.setText("Bandwidth (K):")
+            self.smoothing_param_spin.setRange(0.1, 1e4)
+            self.smoothing_param_spin.setValue(5.0)
+            self.smoothing_param_spin.setVisible(True)
+            self.smoothing_param_label.setVisible(True)
+        elif method == "loess":
+            self.smoothing_param_label.setText("Frac (0–1):")
+            self.smoothing_param_spin.setRange(0.01, 1.0)
+            self.smoothing_param_spin.setValue(0.25)
+            self.smoothing_param_spin.setVisible(True)
+            self.smoothing_param_label.setVisible(True)
+        elif method == "spline":
+            self.smoothing_param_label.setText("Strength (0–1):")
+            self.smoothing_param_spin.setRange(0.0, 1.0)
+            self.smoothing_param_spin.setValue(0.2)
+            self.smoothing_param_spin.setVisible(True)
+            self.smoothing_param_label.setVisible(True)
+        elif method == "boxcar":
+            self.smoothing_param_label.setText("Window (K):")
+            self.smoothing_param_spin.setRange(0.1, 1e4)
+            self.smoothing_param_spin.setValue(5.0)
+            self.smoothing_param_spin.setVisible(True)
+            self.smoothing_param_label.setVisible(True)
+        else:
+            # "none"
+            self.smoothing_param_spin.setVisible(False)
+            self.smoothing_param_label.setVisible(False)
+
     def _plot_3d(self):
         if not self.combined_list:
             QMessageBox.warning(self, "Plot 3D", "No combined data to plot.")
@@ -526,12 +571,18 @@ class DataProcessingApp(QMainWindow):
         
         display_type = self.display_type_dropdown.currentText()
         smoothing_method = self.smoothing_method_dropdown.currentText()
+        
+        smoothing_param = None
+        if smoothing_method != "none":
+            smoothing_param = float(self.smoothing_param_spin.value())
 
         plot_absorption_vs_temperature(
             self.combined_list,
             ranges,
-            display_type = display_type,
-            smoothing = smoothing_method
+            display_type=display_type,
+            smoothing=smoothing_method,
+            smoothing_param=smoothing_param,
+            eval_on_grid=True
         )
 
 # ---------------------- Launch ----------------------

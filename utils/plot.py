@@ -312,18 +312,14 @@ def plot_absorption_vs_temperature(
                                         degree=1, x_eval=x_eval)
 
             elif smoothing == "spline":
-                try:
-                    from scipy.interpolate import UnivariateSpline
-                    s = float(smoothing_param) if smoothing_param is not None else None
-                    k = 3
-                    spl = UnivariateSpline(temperatures, summed_absorbance, s=s, k=k)
-                    x_eval = T_grid if eval_on_grid else temperatures
-                    smoothed = spl(x_eval)
-                except Exception:
-                    # Fallback to Gaussian if SciPy unavailable
-                    _, smoothed = _gaussian_kernel_smooth(temperatures, summed_absorbance,
-                                                          bandwidth=float(window_size if smoothing_param is None else smoothing_param),
-                                                          x_eval=x_eval)
+                from scipy.interpolate import UnivariateSpline
+                strength = float(smoothing_param) if smoothing_param is not None else 0.2
+                # scale relative to data size and variance
+                base_scale = len(temperatures) * np.var(summed_absorbance)
+                s_val = max(1e-8, strength * base_scale)  # avoid s=0
+                spl = UnivariateSpline(temperatures, summed_absorbance, s=s_val, k=3)
+                x_eval = T_grid if eval_on_grid else temperatures
+                smoothed = spl(x_eval)
 
             else:
                 smoothed = None  # nothing
