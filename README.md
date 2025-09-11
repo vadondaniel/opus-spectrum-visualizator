@@ -60,6 +60,8 @@ To create a standalone `.exe` with **PyInstaller**:
 pyinstaller --onefile --windowed --additional-hooks-dir=hooks main.py
 ```
 
+It will be at `dist/main.exe`
+
 ---
 
 ## 📚 Usage Guide
