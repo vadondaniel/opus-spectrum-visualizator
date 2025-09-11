@@ -9,10 +9,11 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QFileDialog, QProgressBar, QLineEdit, QDialog,
     QMessageBox, QComboBox, QGroupBox, QTextBrowser, QDoubleSpinBox, QGridLayout, QSpacerItem, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl, QTimer
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import plotly.graph_objects as go
 
+from utils.export_csv import export_peak_analysis_csv
 from data_processing.spectrum import process_spectrum_data
 from data_processing.temperature import process_temperature_data
 
@@ -260,8 +261,15 @@ class DataProcessingApp(QMainWindow):
         self.wavelength_range_input = QLineEdit()
         self.wavelength_range_input.setPlaceholderText("950-1050, 2450-2550, 3050-3150, ...")
         self.wavelength_range_input.setToolTip("Enter range(s) separated by commas. Example: 950-1050, 2450-2550")
+        
+        self.peak_export_btn = QPushButton("Export as CSV")
+        self.peak_export_btn.setFixedWidth(100)
+        self.peak_export_btn.clicked.connect(self._on_export_csv_clicked)
+        self.peak_export_btn.setEnabled(False)
+        
         grid.addWidget(QLabel("Range(s):"), 0, 0)
-        grid.addWidget(self.wavelength_range_input, 0, 1, 1, 7)
+        grid.addWidget(self.wavelength_range_input, 0, 1, 1, 6)
+        grid.addWidget(self.peak_export_btn, 0, 7)
 
         # Row 1: Display / Method / Param / Button
         self.display_type_dropdown = QComboBox()
@@ -284,7 +292,7 @@ class DataProcessingApp(QMainWindow):
         self.smoothing_param_spin.setFixedWidth(110)
 
         self.peak_btn = QPushButton("Peak Analysis")
-        self.peak_btn.setFixedWidth(120)
+        self.peak_btn.setFixedWidth(100)
         self.peak_btn.clicked.connect(self._plot_absorption)
         self.peak_btn.setEnabled(False)
 
@@ -381,6 +389,7 @@ class DataProcessingApp(QMainWindow):
         self.process_btn.setEnabled(False)
         self.plot_btn.setEnabled(False)
         self.peak_btn.setEnabled(False)
+        self.peak_export_btn.setEnabled(False)
 
         # Spectrum
         self.spectrum_thread = ProcessingThread(process_spectrum_data, self.spectrum_path)
@@ -430,6 +439,7 @@ class DataProcessingApp(QMainWindow):
             # Enable visualization buttons
             self.plot_btn.setEnabled(True)
             self.peak_btn.setEnabled(True)
+            self.peak_export_btn.setEnabled(True)
 
         # Re-enable processing start if inputs are still valid
         self._update_start_enabled()
@@ -615,13 +625,54 @@ class DataProcessingApp(QMainWindow):
             )
         except Exception as exc:
             QMessageBox.warning(self, "Plot error", f"Error while plotting: {exc}")
-            
+       
+    def _on_export_csv_clicked(self):
+        if not self.combined_list:
+            QMessageBox.warning(self, "Peak Analysis Export", "No combined data to export.")
+            return
+
+        s = self.wavelength_range_input.text().strip()
+        if not s:
+            QMessageBox.warning(self, "Peak Analysis Export", "Please enter one or more wavelength ranges.")
+            return
+
+        try:
+            ranges = []
+            for part in s.split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                start_str, end_str = part.replace(" ", "").split("-")
+                start, end = float(start_str), float(end_str)
+                ranges.append((start, end))
+        except Exception:
+            QMessageBox.warning(self, "Peak Analysis Export", "Invalid format. Use e.g. 950-1050, 3050-3150")
+            return
+        
+        filepath = export_peak_analysis_csv(self.combined_list, ranges, parent=self)
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Export Result")
+
+        if filepath:
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setText(f"CSV successfully saved:\n{filepath}")
+        else:
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setText("Export cancelled.")
+
+        msg.exec()
+     
 # ---------------------- Launch ----------------------
 
 def launch_app():
     app = QApplication(sys.argv)
-    win = DataProcessingApp()
-    win.show()
+    window = DataProcessingApp()
+    window.show()
+    
+    # Delay raising/activating until the event loop is running
+    QTimer.singleShot(0, lambda: (window.raise_(), window.activateWindow()))
+    
     sys.exit(app.exec())
 
 
