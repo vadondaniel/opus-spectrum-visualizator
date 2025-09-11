@@ -1,7 +1,7 @@
 # OPUS Visualizator
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![License](https://img.shields.io/badge/license-CeCILL--B-green)
+![License](https://img.shields.io/github/license/vadondaniel/opus-spectrum-visualizator)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![Last Commit](https://img.shields.io/github/last-commit/vadondaniel/opus-spectrum-visualizator)
 
