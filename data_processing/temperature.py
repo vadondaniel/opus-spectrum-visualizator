@@ -29,8 +29,8 @@ def process_temperature_data(file_path, progress_callback=None, num_chunks=100):
     >>> file_path = "/path/to/temperature/data"
     >>> temperature_data = process_temperature_data(file_path)
     """
-    # Read only the columns we need (2=timestamp, 5=temperature)
-    df = pd.read_csv(file_path, sep='\t', header=0, usecols=[2, 5], dtype=float, engine='c')
+    # Read only the columns we need (2=timestamp, 3=temperature)
+    df = pd.read_csv(file_path, sep='\t', header=0, usecols=[2, 3], dtype=float, engine='c')
     df = df.dropna()
     total_rows = len(df)
     
