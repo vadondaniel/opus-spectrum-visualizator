@@ -2,6 +2,69 @@ from PyQt6.QtWidgets import QFileDialog, QWidget
 import pandas as pd
 import numpy as np
 
+
+def export_combined_data_csv(
+    combined_list,
+    parent: QWidget = None,
+    format: str = "long"
+):
+    """
+    Export combined_data (list of dicts with 'temperature', 'wavenumbers', 'absorbance') as CSV.
+
+    Parameters
+    ----------
+    combined_list : list of dict
+        Each dict must contain 'temperature', 'wavenumbers', 'absorbance'.
+    parent : QWidget, optional
+        Parent widget for QFileDialog.
+    format : str, default "long"
+        "long"   -> columns: Temperature, Wavenumber, Absorbance
+        "matrix" -> rows: Temperature, columns: Wavenumbers, values: Absorbance
+    """
+    if not combined_list:
+        raise ValueError("No combined data to export.")
+
+    if not isinstance(combined_list, list) or not isinstance(combined_list[0], dict):
+        raise ValueError("Data format invalid.")
+
+    # File dialog to choose save location
+    filename, _ = QFileDialog.getSaveFileName(
+        parent,
+        "Save Combined Data as CSV",
+        "combined_data.csv",
+        "CSV Files (*.csv)"
+    )
+
+    if not filename:  # user cancelled
+        return None
+
+    # Extract arrays
+    wavenumbers = np.asarray(combined_list[0]["wavenumbers"])
+    temperatures = np.asarray([entry["temperature"] for entry in combined_list])
+    absorbances = np.asarray([entry["absorbance"] for entry in combined_list])
+
+    if format == "long":
+        # Flatten for CSV
+        T, W = np.meshgrid(temperatures, wavenumbers, indexing="ij")
+        df = pd.DataFrame({
+            "Temperature": T.flatten(),
+            "Wavenumber": W.flatten(),
+            "Absorbance": absorbances.flatten()
+        })
+
+    elif format == "matrix":
+        # Rows = temperatures, columns = wavenumbers
+        df = pd.DataFrame(absorbances, index=temperatures, columns=wavenumbers)
+        df.index.name = "Temperature"
+
+    else:
+        raise ValueError("Invalid format. Choose 'long' or 'matrix'.")
+
+    df.to_csv(filename, float_format="%.6f")
+
+    return filename  # return chosen file path
+
+
 def export_peak_analysis_csv(
     combined_list,
     wavelength_ranges,

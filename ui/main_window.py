@@ -13,7 +13,9 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl, QTimer
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import plotly.graph_objects as go
 
-from utils.export_csv import export_peak_analysis_csv
+from utils.export_csv import (
+    export_peak_analysis_csv, export_combined_data_csv
+)
 from data_processing.spectrum import process_spectrum_data
 from data_processing.temperature import process_temperature_data
 
@@ -228,6 +230,12 @@ class DataProcessingApp(QMainWindow):
         self.smoothing_input.setPlaceholderText("Smoothing factor")
         self.smoothing_input.setFixedWidth(110)
         self.smoothing_input.setToolTip("Enter smoothing factor (optional)")
+        
+        # CSV Button
+        self.combined_export_btn = QPushButton("Export as CSV")
+        self.combined_export_btn.setFixedWidth(100)
+        self.combined_export_btn.clicked.connect(self._on_export_combined_csv_clicked)
+        self.combined_export_btn.setEnabled(False)
 
         # Plot button
         self.plot_btn = QPushButton("Plot 3D")
@@ -245,6 +253,7 @@ class DataProcessingApp(QMainWindow):
         vis_layout.addWidget(QLabel("Smoothing:"))
         vis_layout.addWidget(self.smoothing_input)
         vis_layout.addStretch()
+        vis_layout.addWidget(self.combined_export_btn)
         vis_layout.addWidget(self.plot_btn)
 
         vis_group.setLayout(vis_layout)
@@ -264,7 +273,7 @@ class DataProcessingApp(QMainWindow):
         
         self.peak_export_btn = QPushButton("Export as CSV")
         self.peak_export_btn.setFixedWidth(100)
-        self.peak_export_btn.clicked.connect(self._on_export_csv_clicked)
+        self.peak_export_btn.clicked.connect(self._on_export_peak_csv_clicked)
         self.peak_export_btn.setEnabled(False)
         
         grid.addWidget(QLabel("Range(s):"), 0, 0)
@@ -389,6 +398,7 @@ class DataProcessingApp(QMainWindow):
         # Disable buttons until finished
         self.process_btn.setEnabled(False)
         self.plot_btn.setEnabled(False)
+        self.combined_export_btn.setEnabled(False)
         self.peak_btn.setEnabled(False)
         self.peak_export_btn.setEnabled(False)
 
@@ -439,6 +449,7 @@ class DataProcessingApp(QMainWindow):
         else:
             # Enable visualization buttons
             self.plot_btn.setEnabled(True)
+            self.combined_export_btn.setEnabled(True)
             self.peak_btn.setEnabled(True)
             self.peak_export_btn.setEnabled(True)
 
@@ -627,7 +638,26 @@ class DataProcessingApp(QMainWindow):
         except Exception as exc:
             QMessageBox.warning(self, "Plot error", f"Error while plotting: {exc}")
        
-    def _on_export_csv_clicked(self):
+    def _on_export_combined_csv_clicked(self):
+        if not self.combined_list:
+            QMessageBox.warning(self, "Combined Data Export", "No combined data to export.")
+            return
+        
+        filepath = export_combined_data_csv(self.combined_list, parent=self, format="matrix")
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Export Result")
+
+        if filepath:
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setText(f"CSV successfully saved:\n{filepath}")
+        else:
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setText("Export cancelled.")
+
+        msg.exec()
+       
+    def _on_export_peak_csv_clicked(self):
         if not self.combined_list:
             QMessageBox.warning(self, "Peak Analysis Export", "No combined data to export.")
             return
