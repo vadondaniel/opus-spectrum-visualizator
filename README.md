@@ -1,109 +1,112 @@
 # OPUS Visualizator
 
-## to start
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![License](https://img.shields.io/badge/license-CeCILL--B-green)
+![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+![Last Commit](https://img.shields.io/github/last-commit/<your-username>/<your-repo>)
 
-in CMD
-
-> ..\venv\Scripts\activate
-
-> pip install -r requirements.txt
-
-> python main.py
-
-## to install exe
-
-> pyinstaller --onefile --windowed --additional-hooks-dir=hooks main.py
+A tool for visualizing and analyzing OPUS spectral data with temperature correlation and peak analysis.
 
 ---
 
-This project uses read_opus.py by LCS - Laboratoire Catalyse et Spectrochimie, Caen, France. (CeCILL-B license).
+## 📦 Installation
 
-Original source: [GitHub](https://github.com/spectrochempy/spectrochempy/)
+You can run the project either from source or build it into an executable.
 
-CeCILL-B License summary:
+### 1. Clone the repository
 
-- You may use, modify, and distribute this software.
-- Attribution must be retained.
-- Software is provided "as-is" without any warranty.
+```bash
+git clone <your-repo-url>
+cd <your-repo-folder>
+```
 
----
+### 2. Install, and optionally create and activate a virtual environment
 
-## ✅ **1. Choose the Right Framework**
+#### In **CMD** (venv optional)
 
-Since you want:
+```bash
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-- Folder selection
-- File parsing and processing
-- 3D visualization
-- Local desktop-style UI
+#### In **PowerShell** (venv optional)
 
-### 🔹 Best Fit: **PyQt5 / PyQt6** or **PySide6**
-
-- Pros:
-
-  - Native-looking, responsive desktop UI
-  - File/folder dialogs
-  - Embeds 3D plots (via `matplotlib` or `pyqtgraph`)
-  - Highly customizable
-
-### 🔹 Simpler Alternative: **Tkinter**
-
-- Easier to learn, built into Python, but limited GUI flexibility and 3D plotting
-
-### 🔹 Web-based UI: **Dash or Flask**
-
-- Dash is great for data science dashboards with built-in Plotly 3D
-- But folder selection & file I/O is clunky via browser
-
-> **Recommendation**: Go with **PyQt5 or PySide6** for a full-featured, desktop-native UI. You can add Dash or Flask later for web-based access if needed.
-
----
-
-## ✅ **2. Project Structure Suggestion**
-
-Here’s a modular layout:
-
-```html
-my_temp_spectrum_app/
-│
-├── main.py                  # Launches the GUI
-├── ui/                      # GUI code (Qt/Tkinter/Dash)
-│   └── main_window.py
-│
-├── data_processing/
-│   ├── __init__.py
-│   ├── temperature.py       # Functions for temperature file processing
-│   └── spectrum.py          # Functions for spectrum file processing
-│
-├── utils/
-│   ├── file_io.py           # Folder/file reading helpers
-│   └── plot_3d.py           # 3D plotting (e.g., with matplotlib/plotly)
-│
-├── resources/               # Icons, test data, etc.
-└── README.md
+```bash
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
 ---
 
-## ✅ **3. Libraries to Use**
+## 🚀 Running the Application
 
-- **PyQt6** – UI
-- **matplotlib** or **plotly** – for 3D plots
-- **pandas / numpy** – for data parsing and correlation
-- **os / pathlib** – for file handling
+Activate the virtual environment and launch:
+
+```bash
+.\venv\Scripts\activate
+python main.py
+```
 
 ---
 
-## ✅ **4. Starting Steps**
+## ⚙️ Building an Executable
 
-1. **Set up project structure**
-2. **Create dummy temp/spectrum data** to test
-3. **Build GUI:**
+To create a standalone `.exe` with **PyInstaller**:
 
-   - Folder picker
-   - File list preview
-   - Process button
-   - 3D plot widget
-4. **Implement data loaders** in `data_processing/`
-5. **Build correlation logic** (e.g., correlation matrix)
-6. **Plot correlation in 3D**
+```bash
+pyinstaller --onefile --windowed --additional-hooks-dir=hooks main.py
+```
+
+---
+
+## 📚 Usage Guide
+
+1. Select the folder containing OPUS files.
+2. Select the `.txt` file containing temperature data.
+3. Start the processing.
+4. For 3D visualization: set desired options, then click **Plot 3D**.
+5. For peak analysis: adjust parameters, then either
+
+   - click **Export as CSV** to save results, or
+   - click **Peak Analysis** to visualize directly.
+
+---
+
+## 🖼 Screenshots
+
+### Main Interface
+
+  <img src="images/main_ui.png" alt="Main UI" width="600">
+
+### 3D Visualization
+
+  <img src="images/surface_plot.png" alt="3D Surface Plot" width="600">  
+  <img src="images/scatter_plot.png" alt="3D Scatter Plot" width="600">
+
+### Peak Analysis
+
+  <img src="images/peak_analysis.png" alt="Peak Analysis" width="600">
+
+---
+
+## 🛠 Libraries Used
+
+- **PyQt6** – graphical interface
+- **matplotlib** – 2D & 3D plotting
+- **pandas & numpy** – data parsing and correlation
+- [**SpectroChemPy**](https://github.com/spectrochempy/spectrochempy) – OPUS file processing
+
+---
+
+## 📄 License & Attribution
+
+This project uses `read_opus.py` by **LCS – Laboratoire Catalyse et Spectrochimie, Caen, France**, licensed under **CeCILL-B**.
+
+- You may use, modify, and distribute this software.
+- Attribution must be retained.
+- Provided "as-is" without warranty.
+
+Original source: [SpectroChemPy GitHub](https://github.com/spectrochempy/spectrochempy/)
