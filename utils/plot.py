@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import UnivariateSpline
-from scipy.interpolate import InterpolatedUnivariateSpline
 
 def plot_spectra(
         spectra_data, start_index=0, end_index=10,
