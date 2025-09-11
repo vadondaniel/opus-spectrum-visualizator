@@ -358,7 +358,7 @@ class DataProcessingApp(QMainWindow):
                 <li><a href="https://github.com/spectrochempy/spectrochempy">SpectroChemPy</a> (CeCILL-B/C): OPUS file handling and spectroscopic data processing</li>
             </ul>
             <b>Developed by:</b> Dániel Vadon & Dr. Bálint Rubovszky</p>
-            <p><b>Version:</b> 1.0</p>
+            <p><b>Version:</b> 1.0 <a href="https://github.com/vadondaniel/opus-spectrum-visualizator">GitHub</a></p>
             """
         )
 

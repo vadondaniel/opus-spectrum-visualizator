@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-CeCILL--B-green)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
-![Last Commit](https://img.shields.io/github/last-commit/<your-username>/<your-repo>)
+![Last Commit](https://img.shields.io/github/last-commit/vadondaniel/opus-spectrum-visualizator)
 
 A tool for visualizing and analyzing OPUS spectral data with temperature correlation and peak analysis.
 
@@ -16,8 +16,8 @@ You can run the project either from source or build it into an executable.
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
-cd <your-repo-folder>
+git clone https://github.com/vadondaniel/opus-spectrum-visualizator.git
+cd opus-spectrum-visualizator
 ```
 
 ### 2. Install, and optionally create and activate a virtual environment
