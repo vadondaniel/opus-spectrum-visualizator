@@ -20,22 +20,11 @@ git clone https://github.com/vadondaniel/opus-spectrum-visualizator.git
 cd opus-spectrum-visualizator
 ```
 
-### 2. Install, and optionally create and activate a virtual environment
+### 2. Install
 
-#### In **CMD** (venv optional)
-
-```bash
-python -m venv venv
-.\venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-#### In **PowerShell** (venv optional)
+#### In **Terminal**
 
 ```bash
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-python -m venv venv
-.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
@@ -43,10 +32,9 @@ pip install -r requirements.txt
 
 ## 🚀 Running the Application
 
-Activate the virtual environment and launch:
+Launch the application:
 
 ```bash
-.\venv\Scripts\activate
 python main.py
 ```
 
