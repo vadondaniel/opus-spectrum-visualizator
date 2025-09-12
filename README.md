@@ -47,7 +47,7 @@ python main.py
 To create a standalone `.exe` with **PyInstaller**:
 
 ```bash
-pyinstaller --onefile --windowed --additional-hooks-dir=hooks main.py
+pyinstaller --onefile --windowed --icon=icon.ico --additional-hooks-dir=hooks main.py
 ```
 
 It will be at `dist/main.exe`
@@ -57,7 +57,7 @@ It will be at `dist/main.exe`
 Using [InnoSetup](https://jrsoftware.org/isdl.php)
 
 ```bash
-pyinstaller --onedir --windowed --additional-hooks-dir=hooks main.py
+pyinstaller --onedir --windowed --icon=icon.ico --additional-hooks-dir=hooks main.py
 ```
 
 Then open installer.iss with Inno Setup, and Press F9
