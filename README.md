@@ -11,9 +11,11 @@ A tool for visualizing and analyzing OPUS spectral data with temperature correla
 
 ## 📦 Installation
 
-You can run the project either from source or build it into an executable.
+You can run the project either from source or build it into an executable. You'll need [Python](https://www.python.org/downloads/windows).
 
 ### 1. Clone the repository
+
+You'll need [Git](https://git-scm.com/downloads) for this. Alternatively, you can download the app az a zip above.
 
 ```bash
 git clone https://github.com/vadondaniel/opus-spectrum-visualizator.git
@@ -49,6 +51,18 @@ pyinstaller --onefile --windowed --additional-hooks-dir=hooks main.py
 ```
 
 It will be at `dist/main.exe`
+
+## ⚙️ Building an Installer
+
+Using [InnoSetup](https://jrsoftware.org/isdl.php)
+
+```bash
+pyinstaller --onedir --windowed --additional-hooks-dir=hooks main.py
+```
+
+Then open installer.iss with Inno Setup, and Press F9
+
+It will be at `Output/OpusSpectrumVisualizatorInstaller.exe`
 
 ---
 
