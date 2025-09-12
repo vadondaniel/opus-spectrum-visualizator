@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QMessageBox, QComboBox, QGroupBox, QTextBrowser, QDoubleSpinBox, QGridLayout, QSpacerItem, QSizePolicy
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl, QTimer
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 import plotly.graph_objects as go
 
@@ -698,6 +699,7 @@ class DataProcessingApp(QMainWindow):
 
 def launch_app():
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon("icon.ico"))
     window = DataProcessingApp()
     window.show()
     
