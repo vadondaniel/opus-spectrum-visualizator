@@ -56,7 +56,7 @@ def export_combined_data_csv(
     elif format == "matrix":
         # Rows = temperatures, columns = wavenumbers
         df = pd.DataFrame(absorbances, index=temperatures, columns=wavenumbers)
-        df.index.name = "Temperature"
+        df.index.name = ""
 
     else:
         raise ValueError("Invalid format. Choose 'long' or 'matrix'.")
