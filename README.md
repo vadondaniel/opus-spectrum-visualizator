@@ -37,7 +37,7 @@ pip install -r requirements.txt
 Launch the application:
 
 ```bash
-python main.py
+python main.pyw
 ```
 
 ---
@@ -47,7 +47,7 @@ python main.py
 To create a standalone `.exe` with **PyInstaller**:
 
 ```bash
-pyinstaller --onefile --windowed --icon=icon.ico --additional-hooks-dir=hooks main.py
+pyinstaller --onefile --windowed --icon=icon.ico --additional-hooks-dir=hooks main.pyw
 ```
 
 It will be at `dist/main.exe`
