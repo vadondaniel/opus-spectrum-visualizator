@@ -568,6 +568,8 @@ class DataProcessingApp(QMainWindow):
         win.setCentralWidget(central_widget)
         win.resize(1200, 800)
         win.show()
+        
+        self.window_3d = win
 
     def _plot_absorption(self):
         if not self.combined_list:
