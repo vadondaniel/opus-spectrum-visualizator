@@ -1,9 +1,0 @@
-PyQt6
-PyQt6-WebEngine
-matplotlib
-plotly
-numpy
-pandas
-spectrochempy
-scipy
-pyinstaller

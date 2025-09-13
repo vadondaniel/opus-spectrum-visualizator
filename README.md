@@ -13,32 +13,31 @@ A tool for visualizing and analyzing OPUS spectral data with temperature correla
 
 You can run the project either from source or build it into an executable. You'll need [Python](https://www.python.org/downloads/windows).
 
-### 1. Clone the repository
+### 1. Clone or Download the Repository
 
-You'll need [Git](https://git-scm.com/downloads) for this. Alternatively, you can download the app az a zip above.
+You can either clone the repository using [Git](https://git-scm.com/downloads):
 
 ```bash
 git clone https://github.com/vadondaniel/opus-spectrum-visualizator.git
 cd opus-spectrum-visualizator
 ```
 
-### 2. Install
+Or, if you prefer not to use Git, download the repository as a ZIP file from the GitHub page, then extract it to a folder of your choice.
 
-#### In **Terminal**
+### 2. Run the Application
 
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## 🚀 Running the Application
-
-Launch the application:
+You can launch the application directly using Python:
 
 ```bash
 python main.pyw
 ```
+
+> 💡 The `main.pyw` file automatically checks for required Python packages and installs any missing dependencies on first run.
+
+### 3. Notes
+
+* Running `main.pyw` directly works on Windows with a double-click as well, because `.pyw` files start in GUI mode without opening a console window.
+* If you want to run from a terminal, you can still use `python main.pyw` for debugging or seeing logs.
 
 ---
 
