@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 import sys
-import os
-import tempfile
-import numpy as np
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -12,7 +9,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl, QTimer
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWebEngineWidgets import QWebEngineView
-import plotly.graph_objects as go
 
 from utils.export_csv import (
     export_peak_analysis_csv, export_combined_data_csv
@@ -23,7 +19,7 @@ from data_processing.temperature import process_temperature_data
 from data_processing.combined_data import (
     combine_temperature_and_spectrum_data, smooth_combined_by_temperature
 )
-from utils.plot import estimate_bandwidth, plot_absorption_vs_temperature
+from utils.plot import estimate_bandwidth, plot_absorption_vs_temperature, plot_3d
 
 # === Worker Thread Wrapper ===
 class ProcessingThread(QThread):
@@ -457,81 +453,6 @@ class DataProcessingApp(QMainWindow):
         # Re-enable processing start if inputs are still valid
         self._update_start_enabled()
 
-    def show_3d_plot_window(self, combined_data, plot_type="Surface", cmap='plasma', max_points=2_000_000):
-        if not combined_data or not isinstance(combined_data, list) or not isinstance(combined_data[0], dict):
-            QMessageBox.warning(self, "3D Plot", "Data format invalid.")
-            return None
-
-        # Convert to arrays
-        wavenumbers = np.asarray(combined_data[0]["wavenumbers"])
-        temperatures = np.asarray([entry["temperature"]
-                                  for entry in combined_data])
-        absorbances = np.asarray([entry["absorbance"]
-                                 for entry in combined_data])
-
-        # Downsample if too big
-        M, N = absorbances.shape
-        if M * N > max_points:
-            step_m = max(1, int(np.ceil(M / np.sqrt(max_points / N))))
-            step_n = max(1, int(np.ceil(N / np.sqrt(max_points / M))))
-            temperatures = temperatures[::step_m]
-            wavenumbers = wavenumbers[::step_n]
-            absorbances = absorbances[::step_m, ::step_n]
-
-        # Create Plotly figure depending on type
-        if plot_type == "Surface":
-            fig = go.Figure(data=[
-                go.Surface(z=absorbances, x=wavenumbers,
-                           y=temperatures, colorscale=cmap)
-            ])
-        elif plot_type == "Scatter":
-            # Flatten arrays for scatter plot
-            T, W = np.meshgrid(temperatures, wavenumbers, indexing="ij")
-            fig = go.Figure(data=[
-                go.Scatter3d(
-                    x=W.flatten(),
-                    y=T.flatten(),
-                    z=absorbances.flatten(),
-                    mode="markers",
-                    marker=dict(size=2, color=absorbances.flatten(),
-                                colorscale=cmap)
-                )
-            ])
-
-        fig.update_layout(title=f"3D Absorbance {plot_type} Plot")
-        fig.update_layout(
-            scene=dict(
-                xaxis_title="Wavenumber (cm⁻¹)",
-                yaxis_title="Temperature (K)",
-                zaxis_title="Absorbance"
-            ),
-            autosize=True
-        )
-
-        # Save HTML to temp file
-        tmp_html = os.path.join(tempfile.gettempdir(), "plotly_3d.html")
-        fig.write_html(tmp_html, include_plotlyjs='inline')
-
-        # PyQt window
-        win = QMainWindow()
-        win.setWindowTitle(f"3D Absorbance {plot_type} Plot")
-        central_widget = QWidget()
-        layout = QVBoxLayout(central_widget)
-        view = QWebEngineView()
-        view.setUrl(QUrl.fromLocalFile(tmp_html))
-
-        def on_load_finished(ok):
-            if ok:
-                view.resize(view.width() + 1, view.height() + 1)
-                view.resize(view.width() - 1, view.height() - 1)
-
-        view.loadFinished.connect(on_load_finished)
-        layout.addWidget(view)
-        win.setCentralWidget(central_widget)
-        win.resize(1200, 800)
-        win.show()
-        return win
-
     def _update_smoothing_param_ui(self, method: str):
         """Adjust label, ranges and defaults for the smoothing parameter depending on method."""
         method = method.lower()
@@ -594,8 +515,27 @@ class DataProcessingApp(QMainWindow):
 
         cmap = self.cmap_dropdown.currentText()
         plot_type = self.plot_type_dropdown.currentText()
+        
+        html_to_show = plot_3d(data_to_plot, plot_type, cmap, 2_000_000)
 
-        self.surface_window = self.show_3d_plot_window(data_to_plot, plot_type=plot_type, cmap=cmap)
+        # PyQt window
+        win = QMainWindow()
+        win.setWindowTitle(f"3D Absorbance {plot_type} Plot")
+        central_widget = QWidget()
+        layout = QVBoxLayout(central_widget)
+        view = QWebEngineView()
+        view.setUrl(QUrl.fromLocalFile(html_to_show))
+
+        def on_load_finished(ok):
+            if ok:
+                view.resize(view.width() + 1, view.height() + 1)
+                view.resize(view.width() - 1, view.height() - 1)
+
+        view.loadFinished.connect(on_load_finished)
+        layout.addWidget(view)
+        win.setCentralWidget(central_widget)
+        win.resize(1200, 800)
+        win.show()
 
     def _plot_absorption(self):
         if not self.combined_list:

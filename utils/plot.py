@@ -1,4 +1,7 @@
+import os
+import tempfile
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import numpy as np
 from scipy.interpolate import UnivariateSpline
 
@@ -189,35 +192,61 @@ def plot_temperature(
     plt.tight_layout()
     plt.show()
 
-def plot_3d_surface(combined_data, cmap='plasma'):
-    """
-    Plot a 3D surface: Wavenumber (X) vs Temperature (Y) vs Absorbance (Z)
+def plot_3d(combined_data, plot_type="Surface", cmap='plasma', max_points=2_000_000):
+        if not combined_data or not isinstance(combined_data, list) or not isinstance(combined_data[0], dict):
+            raise ValueError("Data format invalid.")
 
-    Parameters:
-    - combined_data: List of dictionaries containing 'wavenumbers', 'temperature', and 'absorbance'.
-    - cmap: Colormap for the surface (default: plasma).
-    """
-    # Stack all data
-    wavenumbers = np.array(combined_data[0]["wavenumbers"])
-    temperatures = np.array([entry["temperature"] for entry in combined_data])
-    absorbances = np.array([entry["absorbance"] for entry in combined_data])
+        # Convert to arrays
+        wavenumbers = np.asarray(combined_data[0]["wavenumbers"])
+        temperatures = np.asarray([entry["temperature"]
+                                  for entry in combined_data])
+        absorbances = np.asarray([entry["absorbance"]
+                                 for entry in combined_data])
 
-    # Create meshgrid
-    WN, TEMP = np.meshgrid(wavenumbers, temperatures)
-    AB = absorbances
+        # Downsample if too big
+        M, N = absorbances.shape
+        if M * N > max_points:
+            step_m = max(1, int(np.ceil(M / np.sqrt(max_points / N))))
+            step_n = max(1, int(np.ceil(N / np.sqrt(max_points / M))))
+            temperatures = temperatures[::step_m]
+            wavenumbers = wavenumbers[::step_n]
+            absorbances = absorbances[::step_m, ::step_n]
 
-    fig = plt.figure(figsize=(12, 8))
-    ax = fig.add_subplot(111, projection='3d')
-    surf = ax.plot_surface(WN, TEMP, AB, cmap=cmap, edgecolor='none')
+        # Create Plotly figure depending on type
+        if plot_type == "Surface":
+            fig = go.Figure(data=[
+                go.Surface(z=absorbances, x=wavenumbers,
+                           y=temperatures, colorscale=cmap)
+            ])
+        elif plot_type == "Scatter":
+            # Flatten arrays for scatter plot
+            T, W = np.meshgrid(temperatures, wavenumbers, indexing="ij")
+            fig = go.Figure(data=[
+                go.Scatter3d(
+                    x=W.flatten(),
+                    y=T.flatten(),
+                    z=absorbances.flatten(),
+                    mode="markers",
+                    marker=dict(size=2, color=absorbances.flatten(),
+                                colorscale=cmap)
+                )
+            ])
 
-    ax.set_xlabel("Wavenumber (cm⁻¹)")
-    ax.set_ylabel("Temperature (K)")
-    ax.set_zlabel("Absorbance")
-    ax.set_title("3D Absorbance Surface")
+        fig.update_layout(title=f"3D Absorbance {plot_type} Plot")
+        fig.update_layout(
+            scene=dict(
+                xaxis_title="Wavenumber (cm⁻¹)",
+                yaxis_title="Temperature (K)",
+                zaxis_title="Absorbance"
+            ),
+            autosize=True
+        )
 
-    fig.colorbar(surf, shrink=0.5, aspect=10)
-    plt.tight_layout()
-    plt.show()
+        # Save HTML to temp file
+        tmp_html = os.path.join(tempfile.gettempdir(), "plotly_3d.html")
+        fig.write_html(tmp_html, include_plotlyjs='inline')
+        
+        return tmp_html
 
 # ---------- helper to estimate gaussian bandwidth (Silverman-like) ----------
 def estimate_bandwidth(temperatures):
