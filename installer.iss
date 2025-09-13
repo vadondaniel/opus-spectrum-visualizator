@@ -18,11 +18,14 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Source: "dist\OpusSpectrumVisualizator\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "icon.ico"; DestDir: "{app}"
 
+[Tasks]
+Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional icons:";
+
 [Icons]
 ; Start Menu shortcut
 Name: "{group}\Opus Spectrum Visualizator"; Filename: "{app}\OpusSpectrumVisualizator.exe"; IconFilename: "{app}\icon.ico"
 ; Desktop shortcut
-Name: "{autodesktop}\Opus Spectrum Visualizator"; Filename: "{app}\OpusSpectrumVisualizator.exe"; IconFilename: "{app}\icon.ico"
+Name: "{userdesktop}\Opus Spectrum Visualizator"; Filename: "{app}\OpusSpectrumVisualizator.exe"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\OpusSpectrumVisualizator.exe"; Description: "Launch Opus Spectrum Visualizator"; Flags: nowait postinstall skipifsilent
