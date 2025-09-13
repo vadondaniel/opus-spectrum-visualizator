@@ -40,7 +40,8 @@ def export_combined_data_csv(
 
     # Extract arrays
     wavenumbers = np.asarray(combined_list[0]["wavenumbers"])
-    temperatures = np.asarray([entry["temperature"] for entry in combined_list])
+    temperatures = np.asarray([entry["temperature"]
+                              for entry in combined_list])
     absorbances = np.asarray([entry["absorbance"] for entry in combined_list])
 
     if format == "long":
@@ -93,11 +94,12 @@ def export_peak_analysis_csv(
         return None
 
     # Sort by temperature
-    temperatures = np.array([e["temperature"] for e in combined_list], dtype=float)
+    temperatures = np.array([e["temperature"]
+                            for e in combined_list], dtype=float)
     sort_idx = np.argsort(temperatures)
     temperatures = temperatures[sort_idx]
 
-    data = {"Temperature (K)": temperatures} #np.round(temperatures, 4)
+    data = {"Temperature (K)": temperatures}  # np.round(temperatures, 4)
 
     for (start_wavelength, end_wavelength) in wavelength_ranges:
         summed_absorbance = np.array([

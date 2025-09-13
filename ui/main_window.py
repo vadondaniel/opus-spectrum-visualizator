@@ -22,6 +22,8 @@ from data_processing.combined_data import (
 from utils.plot import estimate_bandwidth, plot_absorption_vs_temperature, plot_3d
 
 # === Worker Thread Wrapper ===
+
+
 class ProcessingThread(QThread):
     progress_update = pyqtSignal(int)
     result_ready = pyqtSignal(object)
@@ -52,19 +54,22 @@ class ProcessingThread(QThread):
                 self.progress_update.emit(pct)
 
         try:
-            result = self.func(*self.args, progress_callback=callback, **self.kwargs)
+            result = self.func(
+                *self.args, progress_callback=callback, **self.kwargs)
             if result is None:
                 result = []
             self.result_ready.emit(result)
         except Exception as e:
             self.error.emit(str(e))
 
+
 class InfoWindow(QDialog):
     def __init__(self, title, text, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setMinimumSize(500, 350)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowCloseButtonHint)
+        self.setWindowFlags(self.windowFlags() |
+                            Qt.WindowType.WindowCloseButtonHint)
 
         layout = QVBoxLayout()
         layout.setContentsMargins(12, 12, 12, 12)
@@ -75,7 +80,8 @@ class InfoWindow(QDialog):
         self.text_browser.setHtml(text)
         self.text_browser.setOpenExternalLinks(True)
         self.text_browser.setReadOnly(True)
-        self.text_browser.setFrameStyle(QTextBrowser.Shape.NoFrame)  # remove borders
+        self.text_browser.setFrameStyle(
+            QTextBrowser.Shape.NoFrame)  # remove borders
         self.text_browser.setStyleSheet("""
             QTextBrowser {
                 border: none;
@@ -93,6 +99,7 @@ class InfoWindow(QDialog):
 
         self.setLayout(layout)
 
+
 class DataProcessingApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -109,17 +116,18 @@ class DataProcessingApp(QMainWindow):
         # === Menu Bar ===
         menubar = self.menuBar()
         help_menu = menubar.addMenu("Help")
-        
+
         # How To Use action
         howto_action = help_menu.addAction("How To Use")
-        howto_action.setToolTip("Show instructions on how to use the application")
+        howto_action.setToolTip(
+            "Show instructions on how to use the application")
         howto_action.triggered.connect(self.show_howto)
-        
+
         # Credits action
         credits_action = help_menu.addAction("Credits")
         credits_action.setToolTip("Show credits and acknowledgments")
         credits_action.triggered.connect(self.show_credits)
-        
+
         # === Central Widget ===
         central_widget = QWidget()
         main_layout = QVBoxLayout()
@@ -137,7 +145,8 @@ class DataProcessingApp(QMainWindow):
         self.spectrum_label.setStyleSheet("color: gray;")
         self.spectrum_btn = QPushButton("Browse")
         self.spectrum_btn.setFixedWidth(100)
-        self.spectrum_btn.setToolTip("Select the folder containing spectrum files")
+        self.spectrum_btn.setToolTip(
+            "Select the folder containing spectrum files")
         self.spectrum_btn.clicked.connect(self.select_spectrum_folder)
         spec_layout.addWidget(QLabel("Spectrum:"))
         spec_layout.addWidget(self.spectrum_label)
@@ -173,10 +182,12 @@ class DataProcessingApp(QMainWindow):
         # Start Processing button
         self.process_btn = QPushButton("Start Processing")
         self.process_btn.setFixedWidth(140)
-        self.process_btn.setToolTip("Start processing spectrum and temperature data")
+        self.process_btn.setToolTip(
+            "Start processing spectrum and temperature data")
         self.process_btn.clicked.connect(self.start_processing)
         self.process_btn.setEnabled(False)
-        process_layout.addWidget(self.process_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        process_layout.addWidget(
+            self.process_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Helper function to create a progress row
         def create_progress_row(label_text):
@@ -218,7 +229,8 @@ class DataProcessingApp(QMainWindow):
 
         # Colormap
         self.cmap_dropdown = QComboBox()
-        self.cmap_dropdown.addItems(["plasma", "viridis", "inferno", "cividis", "magma"])
+        self.cmap_dropdown.addItems(
+            ["plasma", "viridis", "inferno", "cividis", "magma"])
         self.cmap_dropdown.setFixedWidth(80)
         self.cmap_dropdown.setToolTip("Select the color map for the plot")
 
@@ -227,11 +239,12 @@ class DataProcessingApp(QMainWindow):
         self.smoothing_input.setPlaceholderText("Smoothing factor")
         self.smoothing_input.setFixedWidth(110)
         self.smoothing_input.setToolTip("Enter smoothing factor (optional)")
-        
+
         # CSV Button
         self.combined_export_btn = QPushButton("Export as CSV")
         self.combined_export_btn.setFixedWidth(100)
-        self.combined_export_btn.clicked.connect(self._on_export_combined_csv_clicked)
+        self.combined_export_btn.clicked.connect(
+            self._on_export_combined_csv_clicked)
         self.combined_export_btn.setEnabled(False)
 
         # Plot button
@@ -265,14 +278,16 @@ class DataProcessingApp(QMainWindow):
 
         # Row 0: Ranges (full width)
         self.wavelength_range_input = QLineEdit()
-        self.wavelength_range_input.setPlaceholderText("950-1050, 2450-2550, 3050-3150, ...")
-        self.wavelength_range_input.setToolTip("Enter range(s) separated by commas. Example: 950-1050, 2450-2550")
-        
+        self.wavelength_range_input.setPlaceholderText(
+            "950-1050, 2450-2550, 3050-3150, ...")
+        self.wavelength_range_input.setToolTip(
+            "Enter range(s) separated by commas. Example: 950-1050, 2450-2550")
+
         self.peak_export_btn = QPushButton("Export as CSV")
         self.peak_export_btn.setFixedWidth(100)
         self.peak_export_btn.clicked.connect(self._on_export_peak_csv_clicked)
         self.peak_export_btn.setEnabled(False)
-        
+
         grid.addWidget(QLabel("Range(s):"), 0, 0)
         grid.addWidget(self.wavelength_range_input, 0, 1, 1, 6)
         grid.addWidget(self.peak_export_btn, 0, 7)
@@ -285,8 +300,10 @@ class DataProcessingApp(QMainWindow):
 
         self.smoothing_method_label = QLabel("Smoothing Method:")
         self.smoothing_method_dropdown = QComboBox()
-        self.smoothing_method_dropdown.addItems(["gaussian", "loess", "spline", "boxcar"])
-        self.smoothing_method_dropdown.setToolTip("Select the method of smoothing")
+        self.smoothing_method_dropdown.addItems(
+            ["gaussian", "loess", "spline", "boxcar"])
+        self.smoothing_method_dropdown.setToolTip(
+            "Select the method of smoothing")
         self.smoothing_method_dropdown.setFixedWidth(110)
 
         self.smoothing_param_label = QLabel("Param:")
@@ -311,9 +328,10 @@ class DataProcessingApp(QMainWindow):
 
         grid.addWidget(self.smoothing_param_label, 1, 4)
         grid.addWidget(self.smoothing_param_spin, 1, 5)
-        
+
         # Add a spacer before the button
-        spacer = QSpacerItem(1, 1, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        spacer = QSpacerItem(
+            1, 1, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         grid.addItem(spacer, 1, 6)
 
         grid.addWidget(self.peak_btn, 1, 7)
@@ -322,19 +340,22 @@ class DataProcessingApp(QMainWindow):
         main_layout.addWidget(peak_group)
 
         # connect UI changes
-        self.smoothing_method_dropdown.currentTextChanged.connect(self._update_smoothing_param_ui)
-        self.display_type_dropdown.currentTextChanged.connect(self._on_display_changed)
+        self.smoothing_method_dropdown.currentTextChanged.connect(
+            self._update_smoothing_param_ui)
+        self.display_type_dropdown.currentTextChanged.connect(
+            self._on_display_changed)
         # initialize visibility/ranges
-        self._update_smoothing_param_ui(self.smoothing_method_dropdown.currentText())
+        self._update_smoothing_param_ui(
+            self.smoothing_method_dropdown.currentText())
         self._on_display_changed(self.display_type_dropdown.currentText())
-        
+
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
     def show_info(self, title, text):
         self.info_win = InfoWindow(title, text)
         self.info_win.show()
-        
+
     # === Menu action methods ===
     def show_howto(self):
         self.show_info(
@@ -349,7 +370,7 @@ class DataProcessingApp(QMainWindow):
             </ol>
             """
         )
-    
+
     def show_credits(self):
         self.show_info(
             "Credits",
@@ -370,21 +391,24 @@ class DataProcessingApp(QMainWindow):
 
     # === Slots ===
     def select_spectrum_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, "Select Spectrum Folder")
+        folder = QFileDialog.getExistingDirectory(
+            self, "Select Spectrum Folder")
         if folder:
             self.spectrum_path = folder
             self.spectrum_label.setText(f"{folder}")
         self._update_start_enabled()
 
     def select_temp_file(self):
-        file, _ = QFileDialog.getOpenFileName(self, "Select Temperature File", "", "CSV/TXT Files (*.csv *.txt);;All Files (*)")
+        file, _ = QFileDialog.getOpenFileName(
+            self, "Select Temperature File", "", "CSV/TXT Files (*.csv *.txt);;All Files (*)")
         if file:
             self.temp_file = file
             self.temp_label.setText(f"{file}")
         self._update_start_enabled()
 
     def _update_start_enabled(self):
-        self.process_btn.setEnabled(bool(self.spectrum_path and self.temp_file))
+        self.process_btn.setEnabled(
+            bool(self.spectrum_path and self.temp_file))
 
     def start_processing(self):
         # Reset progress bars
@@ -400,15 +424,19 @@ class DataProcessingApp(QMainWindow):
         self.peak_export_btn.setEnabled(False)
 
         # Spectrum
-        self.spectrum_thread = ProcessingThread(process_spectrum_data, self.spectrum_path)
-        self.spectrum_thread.progress_update.connect(self.spec_progress.setValue)
+        self.spectrum_thread = ProcessingThread(
+            process_spectrum_data, self.spectrum_path)
+        self.spectrum_thread.progress_update.connect(
+            self.spec_progress.setValue)
         self.spectrum_thread.result_ready.connect(self._on_spectrum_done)
         self.spectrum_thread.error.connect(self._on_error)
         self.spectrum_thread.start()
 
         # Temperature
-        self.temperature_thread = ProcessingThread(process_temperature_data, self.temp_file)
-        self.temperature_thread.progress_update.connect(self.temp_progress.setValue)
+        self.temperature_thread = ProcessingThread(
+            process_temperature_data, self.temp_file)
+        self.temperature_thread.progress_update.connect(
+            self.temp_progress.setValue)
         self.temperature_thread.result_ready.connect(self._on_temperature_done)
         self.temperature_thread.error.connect(self._on_error)
         self.temperature_thread.start()
@@ -456,7 +484,7 @@ class DataProcessingApp(QMainWindow):
     def _update_smoothing_param_ui(self, method: str):
         """Adjust label, ranges and defaults for the smoothing parameter depending on method."""
         method = method.lower()
-        
+
         if method == "gaussian":
             self.smoothing_param_label.setText("Bandwidth (K):")
             self.smoothing_param_spin.setRange(0.01, 1e5)
@@ -475,14 +503,16 @@ class DataProcessingApp(QMainWindow):
             self.smoothing_param_label.setText("Strength (0–1):")
             self.smoothing_param_spin.setRange(0.0, 1.0)
             self.smoothing_param_spin.setSingleStep(0.01)
-            self.smoothing_param_spin.setToolTip("Set the level of smoothing (scale can be inconsistent between datasets of varying variances)")
+            self.smoothing_param_spin.setToolTip(
+                "Set the level of smoothing (scale can be inconsistent between datasets of varying variances)")
             self.smoothing_param_spin.setValue(0.2)
 
         elif method == "boxcar":
             self.smoothing_param_label.setText("Window (K):")
             self.smoothing_param_spin.setRange(0.01, 1e5)
             self.smoothing_param_spin.setSingleStep(0.5)
-            self.smoothing_param_spin.setToolTip("Set the range the moving average should use for smoothing")
+            self.smoothing_param_spin.setToolTip(
+                "Set the range the moving average should use for smoothing")
             self.smoothing_param_spin.setValue(5.0)
 
     def _on_display_changed(self, display_text: str):
@@ -508,14 +538,16 @@ class DataProcessingApp(QMainWindow):
         if self.smoothing_input.text() and int(self.smoothing_input.text()) != 0:
             try:
                 temp_window = float(self.smoothing_input.text()) / 10
-                data_to_plot = smooth_combined_by_temperature(data_to_plot, temp_window=temp_window)
+                data_to_plot = smooth_combined_by_temperature(
+                    data_to_plot, temp_window=temp_window)
             except ValueError:
-                QMessageBox.warning(self, "Smoothing", "Invalid smoothing value.")
+                QMessageBox.warning(self, "Smoothing",
+                                    "Invalid smoothing value.")
                 return
 
         cmap = self.cmap_dropdown.currentText()
         plot_type = self.plot_type_dropdown.currentText()
-        
+
         html_to_show = plot_3d(data_to_plot, plot_type, cmap, 2_000_000)
 
         # PyQt window
@@ -539,12 +571,14 @@ class DataProcessingApp(QMainWindow):
 
     def _plot_absorption(self):
         if not self.combined_list:
-            QMessageBox.warning(self, "Peak Analysis", "No combined data to plot.")
+            QMessageBox.warning(self, "Peak Analysis",
+                                "No combined data to plot.")
             return
 
         s = self.wavelength_range_input.text().strip()
         if not s:
-            QMessageBox.warning(self, "Peak Analysis", "Please enter one or more wavelength ranges.")
+            QMessageBox.warning(self, "Peak Analysis",
+                                "Please enter one or more wavelength ranges.")
             return
 
         try:
@@ -557,7 +591,8 @@ class DataProcessingApp(QMainWindow):
                 start, end = float(start_str), float(end_str)
                 ranges.append((start, end))
         except Exception:
-            QMessageBox.warning(self, "Peak Analysis", "Invalid format. Use e.g. 950-1050, 3050-3150")
+            QMessageBox.warning(self, "Peak Analysis",
+                                "Invalid format. Use e.g. 950-1050, 3050-3150")
             return
 
         display_type = self.display_type_dropdown.currentText().lower()
@@ -577,15 +612,18 @@ class DataProcessingApp(QMainWindow):
                 grid_points=400
             )
         except Exception as exc:
-            QMessageBox.warning(self, "Plot error", f"Error while plotting: {exc}")
-       
+            QMessageBox.warning(self, "Plot error",
+                                f"Error while plotting: {exc}")
+
     def _on_export_combined_csv_clicked(self):
         if not self.combined_list:
-            QMessageBox.warning(self, "Combined Data Export", "No combined data to export.")
+            QMessageBox.warning(self, "Combined Data Export",
+                                "No combined data to export.")
             return
-        
-        filepath = export_combined_data_csv(self.combined_list, parent=self, format="matrix")
-        
+
+        filepath = export_combined_data_csv(
+            self.combined_list, parent=self, format="matrix")
+
         msg = QMessageBox(self)
         msg.setWindowTitle("Export Result")
 
@@ -597,15 +635,17 @@ class DataProcessingApp(QMainWindow):
             msg.setText("Export cancelled.")
 
         msg.exec()
-       
+
     def _on_export_peak_csv_clicked(self):
         if not self.combined_list:
-            QMessageBox.warning(self, "Peak Analysis Export", "No combined data to export.")
+            QMessageBox.warning(self, "Peak Analysis Export",
+                                "No combined data to export.")
             return
 
         s = self.wavelength_range_input.text().strip()
         if not s:
-            QMessageBox.warning(self, "Peak Analysis Export", "Please enter one or more wavelength ranges.")
+            QMessageBox.warning(self, "Peak Analysis Export",
+                                "Please enter one or more wavelength ranges.")
             return
 
         try:
@@ -618,11 +658,13 @@ class DataProcessingApp(QMainWindow):
                 start, end = float(start_str), float(end_str)
                 ranges.append((start, end))
         except Exception:
-            QMessageBox.warning(self, "Peak Analysis Export", "Invalid format. Use e.g. 950-1050, 3050-3150")
+            QMessageBox.warning(self, "Peak Analysis Export",
+                                "Invalid format. Use e.g. 950-1050, 3050-3150")
             return
-        
-        filepath = export_peak_analysis_csv(self.combined_list, ranges, parent=self)
-        
+
+        filepath = export_peak_analysis_csv(
+            self.combined_list, ranges, parent=self)
+
         msg = QMessageBox(self)
         msg.setWindowTitle("Export Result")
 
@@ -634,18 +676,19 @@ class DataProcessingApp(QMainWindow):
             msg.setText("Export cancelled.")
 
         msg.exec()
-     
+
 # ---------------------- Launch ----------------------
+
 
 def launch_app():
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon("icon.ico"))
     window = DataProcessingApp()
     window.show()
-    
+
     # Delay raising/activating until the event loop is running
     QTimer.singleShot(0, lambda: (window.raise_(), window.activateWindow()))
-    
+
     sys.exit(app.exec())
 
 

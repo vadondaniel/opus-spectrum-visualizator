@@ -5,10 +5,11 @@ import plotly.graph_objects as go
 import numpy as np
 from scipy.interpolate import UnivariateSpline
 
+
 def plot_spectra(
         spectra_data, start_index=0, end_index=10,
         normalize=False, progress_callback=None, index_offset=False
-        ):
+):
     """
     Plot spectra with start/end index range.
 
@@ -84,12 +85,13 @@ def plot_spectra(
     plt.tight_layout()
     plt.show()
 
+
 def plot_temperature(
         temperature_data,
         start_index=0, end_index=None,
         smooth=False, window_size=3,
         progress_callback=None, index_offset=False
-        ):
+):
     """
     Plot temperature data with optional smoothing and index range.
 
@@ -192,63 +194,66 @@ def plot_temperature(
     plt.tight_layout()
     plt.show()
 
+
 def plot_3d(combined_data, plot_type="Surface", cmap='plasma', max_points=2_000_000):
-        if not combined_data or not isinstance(combined_data, list) or not isinstance(combined_data[0], dict):
-            raise ValueError("Data format invalid.")
+    if not combined_data or not isinstance(combined_data, list) or not isinstance(combined_data[0], dict):
+        raise ValueError("Data format invalid.")
 
-        # Convert to arrays
-        wavenumbers = np.asarray(combined_data[0]["wavenumbers"])
-        temperatures = np.asarray([entry["temperature"]
-                                  for entry in combined_data])
-        absorbances = np.asarray([entry["absorbance"]
-                                 for entry in combined_data])
+    # Convert to arrays
+    wavenumbers = np.asarray(combined_data[0]["wavenumbers"])
+    temperatures = np.asarray([entry["temperature"]
+                              for entry in combined_data])
+    absorbances = np.asarray([entry["absorbance"]
+                             for entry in combined_data])
 
-        # Downsample if too big
-        M, N = absorbances.shape
-        if M * N > max_points:
-            step_m = max(1, int(np.ceil(M / np.sqrt(max_points / N))))
-            step_n = max(1, int(np.ceil(N / np.sqrt(max_points / M))))
-            temperatures = temperatures[::step_m]
-            wavenumbers = wavenumbers[::step_n]
-            absorbances = absorbances[::step_m, ::step_n]
+    # Downsample if too big
+    M, N = absorbances.shape
+    if M * N > max_points:
+        step_m = max(1, int(np.ceil(M / np.sqrt(max_points / N))))
+        step_n = max(1, int(np.ceil(N / np.sqrt(max_points / M))))
+        temperatures = temperatures[::step_m]
+        wavenumbers = wavenumbers[::step_n]
+        absorbances = absorbances[::step_m, ::step_n]
 
-        # Create Plotly figure depending on type
-        if plot_type == "Surface":
-            fig = go.Figure(data=[
-                go.Surface(z=absorbances, x=wavenumbers,
-                           y=temperatures, colorscale=cmap)
-            ])
-        elif plot_type == "Scatter":
-            # Flatten arrays for scatter plot
-            T, W = np.meshgrid(temperatures, wavenumbers, indexing="ij")
-            fig = go.Figure(data=[
-                go.Scatter3d(
-                    x=W.flatten(),
-                    y=T.flatten(),
-                    z=absorbances.flatten(),
-                    mode="markers",
-                    marker=dict(size=2, color=absorbances.flatten(),
-                                colorscale=cmap)
-                )
-            ])
+    # Create Plotly figure depending on type
+    if plot_type == "Surface":
+        fig = go.Figure(data=[
+            go.Surface(z=absorbances, x=wavenumbers,
+                       y=temperatures, colorscale=cmap)
+        ])
+    elif plot_type == "Scatter":
+        # Flatten arrays for scatter plot
+        T, W = np.meshgrid(temperatures, wavenumbers, indexing="ij")
+        fig = go.Figure(data=[
+            go.Scatter3d(
+                x=W.flatten(),
+                y=T.flatten(),
+                z=absorbances.flatten(),
+                mode="markers",
+                marker=dict(size=2, color=absorbances.flatten(),
+                            colorscale=cmap)
+            )
+        ])
 
-        fig.update_layout(title=f"3D Absorbance {plot_type} Plot")
-        fig.update_layout(
-            scene=dict(
-                xaxis_title="Wavenumber (cm⁻¹)",
-                yaxis_title="Temperature (K)",
-                zaxis_title="Absorbance"
-            ),
-            autosize=True
-        )
+    fig.update_layout(title=f"3D Absorbance {plot_type} Plot")
+    fig.update_layout(
+        scene=dict(
+            xaxis_title="Wavenumber (cm⁻¹)",
+            yaxis_title="Temperature (K)",
+            zaxis_title="Absorbance"
+        ),
+        autosize=True
+    )
 
-        # Save HTML to temp file
-        tmp_html = os.path.join(tempfile.gettempdir(), "plotly_3d.html")
-        fig.write_html(tmp_html, include_plotlyjs='inline')
-        
-        return tmp_html
+    # Save HTML to temp file
+    tmp_html = os.path.join(tempfile.gettempdir(), "plotly_3d.html")
+    fig.write_html(tmp_html, include_plotlyjs='inline')
+
+    return tmp_html
 
 # ---------- helper to estimate gaussian bandwidth (Silverman-like) ----------
+
+
 def estimate_bandwidth(temperatures):
     """Estimate a 1D bandwidth (K) from temperature array using Silverman's rule of thumb."""
     x = np.asarray(temperatures, dtype=float)
@@ -259,14 +264,17 @@ def estimate_bandwidth(temperatures):
     # Silverman: 1.06 * sd * n^(-1/5)
     return float(1.06 * sd * n ** (-1/5))
 
+
 def plot_absorption_vs_temperature(
     combined_list,
     wavelength_ranges,
     window_size=5,                # kept for backward-compat; interpreted in K if used
     display_type="both",
     smoothing="gaussian",         # "boxcar", "gaussian", "loess", "spline", or "none"
-    smoothing_param=None,         # boxcar/gaussian: bandwidth in K; loess: frac (0..1); spline: s
-    eval_on_grid=True,            # if True, evaluate smoothed curve on a dense grid for prettier lines
+    # boxcar/gaussian: bandwidth in K; loess: frac (0..1); spline: s
+    smoothing_param=None,
+    # if True, evaluate smoothed curve on a dense grid for prettier lines
+    eval_on_grid=True,
     grid_points=300
 ):
     """
@@ -290,7 +298,8 @@ def plot_absorption_vs_temperature(
         raise ValueError("No combined data to plot.")
 
     # Sort by temperature
-    temperatures = np.array([e["temperature"] for e in combined_list], dtype=float)
+    temperatures = np.array([e["temperature"]
+                            for e in combined_list], dtype=float)
     sort_idx = np.argsort(temperatures)
     temperatures = temperatures[sort_idx]
 
@@ -303,10 +312,11 @@ def plot_absorption_vs_temperature(
     # Prepare dense grid if requested
     T_grid = None
     if eval_on_grid:
-        T_grid = np.linspace(temperatures.min(), temperatures.max(), int(grid_points))
+        T_grid = np.linspace(temperatures.min(),
+                             temperatures.max(), int(grid_points))
 
     for i, (start_wavelength, end_wavelength) in enumerate(wavelength_ranges):
-        color  = base_colors[i % len(base_colors)]      # cycle if >10 ranges
+        color = base_colors[i % len(base_colors)]      # cycle if >10 ranges
         marker = base_markers[i % len(base_markers)]
 
         # Sum/integrate absorbance in the wavelength window for each spectrum
@@ -330,7 +340,8 @@ def plot_absorption_vs_temperature(
         if display_type in ("smoothed", "both") and smoothing != "none":
             # Decide parameter defaults and evaluation x-axis
             if smoothing_param is None:
-                smoothing_param = window_size if smoothing in ("boxcar", "gaussian") else (0.3 if smoothing=="loess" else 0.0)
+                smoothing_param = window_size if smoothing in (
+                    "boxcar", "gaussian") else (0.3 if smoothing == "loess" else 0.0)
 
             x_eval = T_grid if eval_on_grid else temperatures
 
@@ -338,13 +349,15 @@ def plot_absorption_vs_temperature(
                 width = float(smoothing_param)
                 # Uniform (boxcar) kernel in temperature units (K)
                 smoothed = np.array([
-                    np.mean(summed_absorbance[np.abs(temperatures - T0) <= width/2]) 
+                    np.mean(summed_absorbance[np.abs(
+                        temperatures - T0) <= width/2])
                     for T0 in x_eval
                 ], dtype=float)
 
             elif smoothing == "gaussian":
                 _, smoothed = _gaussian_kernel_smooth(temperatures, summed_absorbance,
-                                                      bandwidth=float(smoothing_param),
+                                                      bandwidth=float(
+                                                          smoothing_param),
                                                       x_eval=x_eval)
 
             elif smoothing == "loess":
@@ -354,11 +367,13 @@ def plot_absorption_vs_temperature(
 
             elif smoothing == "spline":
                 # Ensure strength in 0–1
-                strength = float(smoothing_param) if smoothing_param is not None else 0.5
+                strength = float(
+                    smoothing_param) if smoothing_param is not None else 0.5
                 strength = np.clip(strength, 0.0, 1.0)
 
                 x_eval = T_grid if eval_on_grid else temperatures
-                smoothed = _spline_safe_normalized(temperatures, summed_absorbance, x_eval, strength)
+                smoothed = _spline_safe_normalized(
+                    temperatures, summed_absorbance, x_eval, strength)
 
             else:
                 smoothed = None
@@ -398,10 +413,11 @@ def plot_absorption_vs_temperature(
     plt.tight_layout()
     plt.show()
 
+
 def _spline_safe_normalized(x, y, x_eval, strength=0.5):
     """
     Spline smoothing with normalized y to make 0-1 slider perceptually linear across datasets.
-    
+
     Parameters
     ----------
     x : array-like
@@ -435,9 +451,11 @@ def _spline_safe_normalized(x, y, x_eval, strength=0.5):
     y_smooth = y_smooth_norm * (y_max - y_min) + y_min
     return y_smooth
 
+
 def _moving_average(data, window_size):
     """Calculate the moving average of the data."""
     return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
+
 
 def _gaussian_kernel_smooth(x, y, bandwidth, x_eval=None):
     """Gaussian kernel smoother with bandwidth in same units as x (e.g., K)."""
@@ -448,8 +466,10 @@ def _gaussian_kernel_smooth(x, y, bandwidth, x_eval=None):
     x_col = x.reshape(-1, 1)
     x_eval_row = np.asarray(x_eval).reshape(1, -1)
     w = np.exp(-0.5 * ((x_col - x_eval_row) / float(bandwidth))**2)  # (n, m)
-    y_s = (w * y.reshape(-1, 1)).sum(axis=0) / np.clip(w.sum(axis=0), 1e-12, None)
+    y_s = (w * y.reshape(-1, 1)).sum(axis=0) / \
+        np.clip(w.sum(axis=0), 1e-12, None)
     return np.asarray(x_eval), y_s
+
 
 def _loess_1d(x, y, frac=0.3, degree=1, x_eval=None):
     """
@@ -475,11 +495,13 @@ def _loess_1d(x, y, frac=0.3, degree=1, x_eval=None):
             continue
         w = (1 - (di / dmax)**3)**3                  # tricube weights
         # Center x at x0 for numerical stability
-        X = np.vander(x[idx] - x0, N=degree+1, increasing=True)  # [1, (x-x0), ...]
+        X = np.vander(x[idx] - x0, N=degree+1,
+                      increasing=True)  # [1, (x-x0), ...]
         # Weighted least squares using sqrt weights
         Wsqrt = np.sqrt(w)
         Xw = X * Wsqrt[:, None]
         yw = y[idx] * Wsqrt
         beta, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
-        y_fit[j] = beta[0]                           # at x0, (x-x0)=0 → value = intercept
+        # at x0, (x-x0)=0 → value = intercept
+        y_fit[j] = beta[0]
     return x_eval, y_fit

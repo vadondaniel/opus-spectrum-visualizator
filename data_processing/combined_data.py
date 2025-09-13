@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def combine_temperature_and_spectrum_data(temperature_data, spectrum_data, time_buffer=60):
     """
     Match temperature data to each spectrum based on timestamp.
@@ -59,14 +60,15 @@ def combine_temperature_and_spectrum_data(temperature_data, spectrum_data, time_
 
     return combined_data
 
+
 def smooth_combined_by_temperature(combined_list, temp_window=2.0):
     """
     Smooth combined_list along the temperature (Y) axis.
-    
+
     Args:
         combined_list (list of dict): Each dict must have "temperature", "wavenumbers", "absorbance".
         temp_window (float): Temperature bin width (K). Average all spectra within each bin.
-        
+
     Returns:
         List[dict]: Smoothed combined list with averaged spectra per temperature bin.
     """
@@ -75,7 +77,8 @@ def smooth_combined_by_temperature(combined_list, temp_window=2.0):
 
     # Extract temperatures and spectra
     temps = np.array([item["temperature"] for item in combined_list])
-    wavenumbers = combined_list[0]["wavenumbers"]  # assume all spectra share wavenumbers
+    # assume all spectra share wavenumbers
+    wavenumbers = combined_list[0]["wavenumbers"]
     absorbances = np.array([item["absorbance"] for item in combined_list])
 
     # Define temperature bins
@@ -90,11 +93,13 @@ def smooth_combined_by_temperature(combined_list, temp_window=2.0):
             continue  # skip empty bins
 
         avg_temp = temps[mask].mean()
-        avg_abs = absorbances[mask].mean(axis=0)  # average absorbance at each wavenumber
+        # average absorbance at each wavenumber
+        avg_abs = absorbances[mask].mean(axis=0)
 
         smoothed_list.append({
             "timestamp": np.mean([combined_list[j]["timestamp"] for j in range(len(combined_list)) if mask[j]]),
-            "datetime": combined_list[np.where(mask)[0][0]]["datetime"],  # pick first datetime in bin
+            # pick first datetime in bin
+            "datetime": combined_list[np.where(mask)[0][0]]["datetime"],
             "temperature": avg_temp,
             "wavenumbers": wavenumbers,
             "absorbance": avg_abs

@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+
 def process_temperature_data(file_path, progress_callback=None, num_chunks=100):
     """
     Processes temperature data from a specified file.
@@ -30,10 +31,11 @@ def process_temperature_data(file_path, progress_callback=None, num_chunks=100):
     >>> temperature_data = process_temperature_data(file_path)
     """
     # Read only the columns we need (2=timestamp, 3=temperature)
-    df = pd.read_csv(file_path, sep='\t', header=0, usecols=[2, 3], dtype=float, engine='c')
+    df = pd.read_csv(file_path, sep='\t', header=0, usecols=[
+                     2, 3], dtype=float, engine='c')
     df = df.dropna()
     total_rows = len(df)
-    
+
     if total_rows == 0:
         if progress_callback:
             progress_callback("100%")
@@ -53,10 +55,12 @@ def process_temperature_data(file_path, progress_callback=None, num_chunks=100):
 
         # Update progress
         if progress_callback:
-            percent = math.ceil(min(i + chunk_size, total_rows) / total_rows * 100)
+            percent = math.ceil(
+                min(i + chunk_size, total_rows) / total_rows * 100)
             progress_callback(f"{percent}%")
 
     return result_data
+
 
 def interpolate_to_round_seconds(temperature_data):
     """
@@ -88,15 +92,18 @@ def interpolate_to_round_seconds(temperature_data):
 
     # Extract timestamps and temperatures
     timestamps = np.array([entry["timestamp"] for entry in temperature_data])
-    temperatures = np.array([entry["temperature"] for entry in temperature_data], dtype=float)
+    temperatures = np.array([entry["temperature"]
+                            for entry in temperature_data], dtype=float)
 
     # Create a new array of round seconds from the minimum to the maximum timestamp
     round_seconds = np.arange(timestamps.min(), timestamps.max() + 1, 1)
 
     # Interpolate temperatures at the new timestamps
-    interpolated_temperatures = np.interp(round_seconds, timestamps, temperatures)
+    interpolated_temperatures = np.interp(
+        round_seconds, timestamps, temperatures)
 
     # Create a new list of dictionaries with interpolated data
-    interpolated_data = [{"timestamp": int(ts), "temperature": float(temp)} for ts, temp in zip(round_seconds, interpolated_temperatures)]
+    interpolated_data = [{"timestamp": int(ts), "temperature": float(
+        temp)} for ts, temp in zip(round_seconds, interpolated_temperatures)]
 
     return interpolated_data

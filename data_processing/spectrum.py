@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from utils.read_opus import read_opus
 
+
 def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
     """
     Processes spectrum data from OPUS files in a specified folder.
@@ -47,8 +48,10 @@ def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
 
     if not input_files:
         msg = "No OPUS files found."
-        if progress_callback: progress_callback(msg)
-        else: print(msg)
+        if progress_callback:
+            progress_callback(msg)
+        else:
+            print(msg)
         return []
 
     result_data = []
@@ -116,6 +119,7 @@ def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
 
     return result_data
 
+
 def interpolate_spectrum_data(spectrum_data, progress_callback=None):
     """
     Interpolates spectrum data to a common wavenumber range.
@@ -149,13 +153,17 @@ def interpolate_spectrum_data(spectrum_data, progress_callback=None):
     """
     if not spectrum_data:
         msg = "No spectrum data to interpolate."
-        if progress_callback: progress_callback(msg)
-        else: print(msg)
+        if progress_callback:
+            progress_callback(msg)
+        else:
+            print(msg)
         return []
 
     # Convert all wavenumbers and absorbances to 2D NumPy arrays
-    wn_arrays = [np.array(entry["wavenumbers"])[::-1] for entry in spectrum_data]
-    ab_arrays = [np.array(entry["absorbance"])[::-1] for entry in spectrum_data]
+    wn_arrays = [np.array(entry["wavenumbers"])[::-1]
+                 for entry in spectrum_data]
+    ab_arrays = [np.array(entry["absorbance"])[::-1]
+                 for entry in spectrum_data]
 
     # Determine common integer wavenumber range
     min_wn = max(w.min() for w in wn_arrays)
@@ -163,8 +171,10 @@ def interpolate_spectrum_data(spectrum_data, progress_callback=None):
     common_wavenumbers = np.arange(int(max_wn), int(min_wn) - 1, -1)
 
     msg = f"Interpolating to common wavenumber range: {common_wavenumbers[0]} to {common_wavenumbers[-1]} ({len(common_wavenumbers)} points)"
-    if progress_callback: progress_callback(msg)
-    else: print(msg)
+    if progress_callback:
+        progress_callback(msg)
+    else:
+        print(msg)
 
     # Vectorized interpolation
     interpolated_absorbances = np.array([
@@ -187,6 +197,7 @@ def interpolate_spectrum_data(spectrum_data, progress_callback=None):
         print("Interpolation complete.")
 
     return interpolated_data
+
 
 def natural_sort_key(s):
     """
