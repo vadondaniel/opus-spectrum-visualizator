@@ -2,7 +2,7 @@
 
 [Setup]
 AppName=Opus Spectrum Visualizator
-AppVersion=1.0
+AppVersion=1.1
 AppId={{14DBC78D-7245-4D78-B431-1E662A905EFA}}
 DefaultDirName={pf}\Opus Spectrum Visualizator
 DefaultGroupName=Opus Spectrum Visualizator
@@ -15,14 +15,14 @@ SolidCompression=yes
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "dist\main\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\OpusSpectrumVisualizator\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "icon.ico"; DestDir: "{app}"
 
 [Icons]
 ; Start Menu shortcut
-Name: "{group}\Opus Spectrum Visualizator"; Filename: "{app}\main.exe"; IconFilename: "{app}\icon.ico"
+Name: "{group}\Opus Spectrum Visualizator"; Filename: "{app}\OpusSpectrumVisualizator.exe"; IconFilename: "{app}\icon.ico"
 ; Desktop shortcut
-Name: "{autodesktop}\Opus Spectrum Visualizator"; Filename: "{app}\main.exe"; IconFilename: "{app}\icon.ico"
+Name: "{autodesktop}\Opus Spectrum Visualizator"; Filename: "{app}\OpusSpectrumVisualizator.exe"; IconFilename: "{app}\icon.ico"
 
 [Run]
-Filename: "{app}\main.exe"; Description: "Launch Opus Spectrum Visualizator"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\OpusSpectrumVisualizator.exe"; Description: "Launch Opus Spectrum Visualizator"; Flags: nowait postinstall skipifsilent
