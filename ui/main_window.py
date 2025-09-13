@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import os
 from pathlib import Path
 import sys
 
@@ -11,6 +10,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl, QTimer
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWebEngineWidgets import QWebEngineView
+import numpy as np
 
 from utils.export_csv import (
     export_peak_analysis_csv, export_combined_data_csv
@@ -216,6 +216,26 @@ class DataProcessingApp(QMainWindow):
 
         process_group.setLayout(process_layout)
         main_layout.addWidget(process_group)
+        
+        # === Absorbance Range Filter ===
+        absorbance_group = QGroupBox("Absorbance Range Filter")
+        abs_layout = QHBoxLayout()
+
+        self.abs_min_input = QLineEdit()
+        self.abs_min_input.setPlaceholderText("Min (e.g., 0)")
+        self.abs_min_input.setFixedWidth(80)
+
+        self.abs_max_input = QLineEdit()
+        self.abs_max_input.setPlaceholderText("Max (e.g., 1)")
+        self.abs_max_input.setFixedWidth(80)
+
+        abs_layout.addWidget(QLabel("Min:"))
+        abs_layout.addWidget(self.abs_min_input)
+        abs_layout.addWidget(QLabel("Max:"))
+        abs_layout.addWidget(self.abs_max_input)
+        abs_layout.addStretch()
+        absorbance_group.setLayout(abs_layout)
+        main_layout.addWidget(absorbance_group)
 
         # === 3D Plotting ===
         vis_group = QGroupBox("3D Plotting")
@@ -483,6 +503,39 @@ class DataProcessingApp(QMainWindow):
         # Re-enable processing start if inputs are still valid
         self._update_start_enabled()
 
+    def get_filtered_combined_list(self):
+        """Return combined_list filtered by min/max absorbance if inputs are provided."""
+        if not self.combined_list:
+            return []
+    
+        try:
+            min_val = float(self.abs_min_input.text()) if self.abs_min_input.text() else None
+        except ValueError:
+            min_val = None
+    
+        try:
+            max_val = float(self.abs_max_input.text()) if self.abs_max_input.text() else None
+        except ValueError:
+            max_val = None
+    
+        if min_val is None and max_val is None:
+            return self.combined_list
+    
+        filtered = []
+        for entry in self.combined_list:
+            new_entry = entry.copy()
+            absorbance = new_entry["absorbance"]
+    
+            if min_val is not None:
+                absorbance = np.maximum(absorbance, min_val)
+            if max_val is not None:
+                absorbance = np.minimum(absorbance, max_val)
+    
+            new_entry["absorbance"] = absorbance
+            filtered.append(new_entry)
+    
+        return filtered
+
     def _update_smoothing_param_ui(self, method: str):
         """Adjust label, ranges and defaults for the smoothing parameter depending on method."""
         method = method.lower()
@@ -490,8 +543,8 @@ class DataProcessingApp(QMainWindow):
         if method == "gaussian":
             self.smoothing_param_label.setText("Bandwidth (K):")
             self.smoothing_param_spin.setRange(0.01, 1e5)
-            self.smoothing_param_spin.setValue(estimate_bandwidth([e["temperature"] for e in self.combined_list])
-                                               if self.combined_list else 5.0)
+            self.smoothing_param_spin.setValue(estimate_bandwidth([e["temperature"] for e in self.get_filtered_combined_list()])
+                                               if self.get_filtered_combined_list() else 5.0)
             self.smoothing_param_spin.setToolTip("Set the level of smoothing")
 
         elif method == "loess":
@@ -531,11 +584,11 @@ class DataProcessingApp(QMainWindow):
             self.smoothing_method_label.setVisible(True)
 
     def _plot_3d(self):
-        if not self.combined_list:
+        if not self.get_filtered_combined_list():
             QMessageBox.warning(self, "Plot 3D", "No combined data to plot.")
             return
 
-        data_to_plot = self.combined_list
+        data_to_plot = self.get_filtered_combined_list()
 
         if self.smoothing_input.text() and int(self.smoothing_input.text()) != 0:
             try:
@@ -574,7 +627,7 @@ class DataProcessingApp(QMainWindow):
         self.window_3d = win
 
     def _plot_absorption(self):
-        if not self.combined_list:
+        if not self.get_filtered_combined_list():
             QMessageBox.warning(self, "Peak Analysis",
                                 "No combined data to plot.")
             return
@@ -607,7 +660,7 @@ class DataProcessingApp(QMainWindow):
 
         try:
             plot_absorption_vs_temperature(
-                self.combined_list,
+                self.get_filtered_combined_list(),
                 ranges,
                 display_type=display_type,
                 smoothing=smoothing_method,
@@ -620,13 +673,13 @@ class DataProcessingApp(QMainWindow):
                                 f"Error while plotting: {exc}")
 
     def _on_export_combined_csv_clicked(self):
-        if not self.combined_list:
+        if not self.get_filtered_combined_list():
             QMessageBox.warning(self, "Combined Data Export",
                                 "No combined data to export.")
             return
 
         filepath = export_combined_data_csv(
-            self.combined_list, parent=self, format="matrix")
+            self.get_filtered_combined_list(), parent=self, format="matrix")
 
         msg = QMessageBox(self)
         msg.setWindowTitle("Export Result")
@@ -641,7 +694,7 @@ class DataProcessingApp(QMainWindow):
         msg.exec()
 
     def _on_export_peak_csv_clicked(self):
-        if not self.combined_list:
+        if not self.get_filtered_combined_list():
             QMessageBox.warning(self, "Peak Analysis Export",
                                 "No combined data to export.")
             return
@@ -667,7 +720,7 @@ class DataProcessingApp(QMainWindow):
             return
 
         filepath = export_peak_analysis_csv(
-            self.combined_list, ranges, parent=self)
+            self.get_filtered_combined_list(), ranges, parent=self)
 
         msg = QMessageBox(self)
         msg.setWindowTitle("Export Result")
@@ -709,10 +762,7 @@ def launch_app():
 
     app = QApplication(sys.argv)
 
-    icon_path = resource_path("icon.ico")
-    print("icon_path:", icon_path, "exists:", os.path.exists(icon_path))
-    icon = QIcon(icon_path)
-    print("QIcon.isNull():", icon.isNull())
+    icon = QIcon(resource_path("icon.ico"))
 
     if not icon.isNull():
         app.setWindowIcon(icon)
