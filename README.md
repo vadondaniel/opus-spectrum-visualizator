@@ -47,7 +47,7 @@ python main.pyw
 To create a standalone `.exe` with **PyInstaller**:
 
 ```bash
-pyinstaller --onefile --windowed --icon=icon.ico --additional-hooks-dir=hooks main.pyw
+pyinstaller --onefile --windowed --clean --icon=icon.ico --add-data "icon.ico;." --additional-hooks-dir=hooks main.pyw
 ```
 
 It will be at `dist/main.exe`
@@ -57,10 +57,10 @@ It will be at `dist/main.exe`
 Using [InnoSetup](https://jrsoftware.org/isdl.php)
 
 ```bash
-pyinstaller --onedir --windowed --icon=icon.ico --additional-hooks-dir=hooks main.py
+pyinstaller --onedir --windowed --clean --icon=icon.ico --add-data "icon.ico;." --additional-hooks-dir=hooks main.pyw
 ```
 
-Then open installer.iss with Inno Setup, and Press F9
+Then open installer.iss with Inno Setup, and Press Ctrl+F9 or find the compile button.
 
 It will be at `Output/OpusSpectrumVisualizatorInstaller.exe`
 
