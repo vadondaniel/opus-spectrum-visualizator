@@ -245,8 +245,9 @@ class DataProcessingApp(QMainWindow):
 
         # Plot type
         self.plot_type_dropdown = QComboBox()
-        self.plot_type_dropdown.addItems(["Surface", "Scatter"])
-        self.plot_type_dropdown.setFixedWidth(80)
+        self.plot_type_dropdown.addItems(
+            ["Surface", "Scatter", "Contour", "Heatmap"])
+        self.plot_type_dropdown.setFixedWidth(100)
         self.plot_type_dropdown.setToolTip("Select the 3D plot type")
 
         # Colormap

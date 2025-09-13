@@ -204,7 +204,7 @@ def plot_3d(combined_data, plot_type="Surface", cmap='plasma', max_points=2_000_
     temperatures = np.asarray([entry["temperature"]
                               for entry in combined_data])
     absorbances = np.asarray([entry["absorbance"]
-                             for entry in combined_data])
+                              for entry in combined_data])
 
     # Downsample if too big
     M, N = absorbances.shape
@@ -234,8 +234,46 @@ def plot_3d(combined_data, plot_type="Surface", cmap='plasma', max_points=2_000_
                             colorscale=cmap)
             )
         ])
+    elif plot_type == "Contour":
+        # Downsample for contour to avoid lag
+        M, N = absorbances.shape
+        step_m = max(1, int(np.ceil(M / np.sqrt(max_points / N))))
+        step_n = max(1, int(np.ceil(N / np.sqrt(max_points / M))))
+        T_ds = temperatures[::step_m]
+        W_ds = wavenumbers[::step_n]
+        A_ds = absorbances[::step_m, ::step_n]
 
-    fig.update_layout(title=f"3D Absorbance {plot_type} Plot")
+        fig = go.Figure(data=[
+            go.Contour(
+                z=A_ds,
+                x=W_ds,
+                y=T_ds,
+                colorscale=cmap,
+                contours=dict(showlines=True, showlabels=True,
+                              labelfont=dict(size=10))
+            )
+        ])
+        fig.update_layout(
+            xaxis_title="Wavenumber (cm⁻¹)",
+            yaxis_title="Temperature (K)"
+        )
+    elif plot_type == "Heatmap":
+        # Much faster alternative to contour
+        fig = go.Figure(data=[
+            go.Heatmap(
+                z=absorbances,
+                x=wavenumbers,
+                y=temperatures,
+                colorscale=cmap
+            )
+        ])
+        fig.update_layout(
+            xaxis_title="Wavenumber (cm⁻¹)",
+            yaxis_title="Temperature (K)"
+        )
+
+    # Layout
+    fig.update_layout(title=f"Absorbance {plot_type} Plot")
     fig.update_layout(
         scene=dict(
             xaxis_title="Wavenumber (cm⁻¹)",
