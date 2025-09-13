@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import os
+from pathlib import Path
 import sys
 
 from PyQt6.QtWidgets import (
@@ -568,7 +570,7 @@ class DataProcessingApp(QMainWindow):
         win.setCentralWidget(central_widget)
         win.resize(1200, 800)
         win.show()
-        
+
         self.window_3d = win
 
     def _plot_absorption(self):
@@ -682,15 +684,46 @@ class DataProcessingApp(QMainWindow):
 # ---------------------- Launch ----------------------
 
 
+def resource_path(rel_path: str) -> str:
+    """
+    Return the absolute path to a bundled resource (works with PyInstaller).
+    When running as source it uses the folder of the main script (sys.argv[0]),
+    not the folder of this module (__file__).
+    """
+    if getattr(sys, "frozen", False):
+        base = Path(sys._MEIPASS)
+    else:
+        base = Path(sys.argv[0]).resolve().parent
+    return str(base / rel_path)
+
+
 def launch_app():
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            myappid = "com.ceavan.OpusSpectrumVisualizator"
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                myappid)
+        except Exception:
+            pass
+
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon("icon.ico"))
+
+    icon_path = resource_path("icon.ico")
+    print("icon_path:", icon_path, "exists:", os.path.exists(icon_path))
+    icon = QIcon(icon_path)
+    print("QIcon.isNull():", icon.isNull())
+
+    if not icon.isNull():
+        app.setWindowIcon(icon)
+
     window = DataProcessingApp()
+    window.setWindowTitle("Opus Spectrum Visualizator")
+    if not icon.isNull():
+        window.setWindowIcon(icon)
+
     window.show()
-
-    # Delay raising/activating until the event loop is running
     QTimer.singleShot(0, lambda: (window.raise_(), window.activateWindow()))
-
     sys.exit(app.exec())
 
 
