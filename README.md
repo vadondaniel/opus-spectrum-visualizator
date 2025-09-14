@@ -9,59 +9,82 @@ A tool for visualizing and analyzing OPUS spectral data with temperature correla
 
 ---
 
-## 📦 Installation
+## 📦 Installation (End-User)
 
-You can run the project either from source or build it into an executable. You'll need [Python](https://www.python.org/downloads/windows).
+The easiest way to install is by using the prebuilt Windows installer.
 
-### 1. Clone or Download the Repository
+### 1. Download the Installer
 
-You can either clone the repository using [Git](https://git-scm.com/downloads):
+1. Go to the [Releases page on GitHub](https://github.com/vadondaniel/opus-spectrum-visualizator/releases).
+2. Download the file named similar to:
+
+   ```
+   OpusSpectrumVisualizatorInstaller.exe
+   ```
+
+### 2. Install
+
+1. Double-click the downloaded `.exe` file.
+2. Follow the installation prompts.
+
+### 3. Launch
+
+Start the program from the **Desktop Icon**, **Start Menu** or search for *Opus Spectrum Visualizator*.
+
+---
+
+## ⚙️ Installation (Developer / Source Build)
+
+If you want to run or modify the program from source, follow these steps:
+
+### 1. Requirements
+
+* [Python](https://www.python.org/downloads/windows) 3.x
+
+### 2. Clone or Download the Repository
+
+Either clone using [Git](https://git-scm.com/downloads):
 
 ```bash
 git clone https://github.com/vadondaniel/opus-spectrum-visualizator.git
 cd opus-spectrum-visualizator
 ```
 
-Or, if you prefer not to use Git, download the repository as a ZIP file from the GitHub page, then extract it to a folder of your choice.
+Or download the [repository](https://github.com/vadondaniel/opus-spectrum-visualizator/archive/refs/heads/main.zip) or a [release](https://github.com/vadondaniel/opus-spectrum-visualizator/releases) as a ZIP from GitHub and extract it.
 
-### 2. Run the Application
+### 3. Run the Application
 
-You can launch the application directly using Python:
+Launch with Python:
 
 ```bash
 python main.pyw
 ```
 
-> 💡 The `main.pyw` file automatically checks for required Python packages and installs any missing dependencies on first run.
+> (or just open the main.pyw file)
 
-### 3. Notes
+> The program will automatically install missing dependencies on first run.
 
-* Running `main.pyw` directly works on Windows with a double-click as well, because `.pyw` files start in GUI mode without opening a console window.
-* If you want to run from a terminal, you can still use `python main.pyw` for debugging or seeing logs.
+### 4. Build an Executable
 
----
-
-## ⚙️ Building an Executable
-
-To create a standalone `.exe` with **PyInstaller**:
+(Optional) Create a standalone `.exe` using PyInstaller:
 
 ```bash
 pyinstaller --onefile main.spec
 ```
 
-It will be at `dist/main.exe`
+The executable will appear in the `/dist/` folder as `main.exe`
 
-## ⚙️ Building an Installer
+### 5. Build an Installer
 
-Using [InnoSetup](https://jrsoftware.org/isdl.php)
+(Optional) Using [Inno Setup](https://jrsoftware.org/isdl.php):
 
-```bash
-pyinstaller main.spec
-```
+1. Run `pyinstaller main.spec`.
+2. Open `installer.iss` in Inno Setup.
+3. Compile (Ctrl+F9).
 
-Then open installer.iss with Inno Setup, and Press Ctrl+F9 or find the compile button.
+The installer will appear in the `/Output/` folder as `OpusSpectrumVisualizatorInstaller.exe`
 
-It will be at `Output/OpusSpectrumVisualizatorInstaller.exe`
+> Using a version installed with the installer starts considerably faster than a single executable file from step 4 above.
 
 ---
 
