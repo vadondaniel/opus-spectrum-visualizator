@@ -78,9 +78,9 @@ def plot_spectra(
     plt.ylabel('Absorbance')
     plt.title('Spectra')
 
-    plt.gca().invert_xaxis()
+    #plt.gca().invert_xaxis()
 
-    plt.legend(loc="best", fontsize="small")
+    #plt.legend(loc="best", fontsize="small")
 
     plt.tight_layout()
     plt.show()

@@ -13,7 +13,7 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 import numpy as np
 
 from utils.export_csv import (
-    export_peak_analysis_csv, export_combined_data_csv
+    export_peak_analysis_csv, export_combined_data_csv, export_spectra_csv
 )
 from data_processing.spectrum import process_spectrum_data
 from data_processing.temperature import process_temperature_data
@@ -21,7 +21,7 @@ from data_processing.temperature import process_temperature_data
 from data_processing.combined_data import (
     combine_temperature_and_spectrum_data, smooth_combined_by_temperature
 )
-from utils.plot import estimate_bandwidth, plot_absorption_vs_temperature, plot_3d
+from utils.plot import estimate_bandwidth, plot_absorption_vs_temperature, plot_3d, plot_spectra
 
 # === Worker Thread Wrapper ===
 
@@ -139,7 +139,12 @@ class MainWindow(QMainWindow):
         # Add each group box section
         main_layout.addWidget(self._create_file_selection_group())
         main_layout.addWidget(self._create_processing_group())
-        main_layout.addWidget(self._create_absorbance_group())
+        
+        abs_spec_layout = QHBoxLayout()
+        abs_spec_layout.addWidget(self._create_absorbance_group())
+        abs_spec_layout.addWidget(self._create_spectra_group())
+        main_layout.addLayout(abs_spec_layout)
+        
         main_layout.addWidget(self._create_visualization_group())
         main_layout.addWidget(self._create_peak_analysis_group())
 
@@ -268,6 +273,36 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel("Max:"))
         layout.addWidget(self.abs_max_input)
         layout.addStretch()
+        group.setLayout(layout)
+        return group
+
+    # ------------------------
+    # Spectra
+    # ------------------------
+    def _create_spectra_group(self):
+        group = QGroupBox("Spectra")
+        layout = QHBoxLayout()
+        layout.setSpacing(10)
+        layout.setContentsMargins(10, 6, 10, 6)
+
+        # Export button
+        self.export_csv_btn = QPushButton("Export as CSV")
+        self.export_csv_btn.setFixedWidth(110)
+        self.export_csv_btn.clicked.connect(
+            self._on_export_spectra_csv_clicked)
+        self.export_csv_btn.setEnabled(False)
+
+        # Plot button
+        self.plot_spectra_btn = QPushButton("Plot Spectra")
+        self.plot_spectra_btn.setFixedWidth(110)
+        self.plot_spectra_btn.clicked.connect(self._on_plot_spectra_clicked)
+        self.plot_spectra_btn.setEnabled(False)
+
+        # Assemble
+        layout.addStretch()
+        layout.addWidget(self.export_csv_btn)
+        layout.addWidget(self.plot_spectra_btn)
+
         group.setLayout(layout)
         return group
 
@@ -464,12 +499,18 @@ class MainWindow(QMainWindow):
             bool(self.spectrum_path and self.temp_file))
 
     def start_processing(self):
+        self.spectrum_list = []
+        self.temperature_list_filtered = []
+        self.combined_list = []
+
         # Reset progress bars
         self.spec_progress.setValue(0)
         self.temp_progress.setValue(0)
         self.combine_progress.setValue(0)
 
         # Disable buttons until finished
+        self.export_csv_btn.setEnabled(False)
+        self.plot_spectra_btn.setEnabled(False)
         self.process_btn.setEnabled(False)
         self.plot_btn.setEnabled(False)
         self.combined_export_btn.setEnabled(False)
@@ -500,6 +541,9 @@ class MainWindow(QMainWindow):
     def _on_spectrum_done(self, result):
         self.spectrum_list = result
         self.spec_progress.setValue(100)
+        if self.spectrum_list:
+            self.export_csv_btn.setEnabled(True)
+            self.plot_spectra_btn.setEnabled(True)
         self._combine_data()
 
     def _on_temperature_done(self, result):
@@ -533,6 +577,41 @@ class MainWindow(QMainWindow):
 
         # Re-enable processing start if inputs are still valid
         self._update_start_enabled()
+
+    def get_filtered_spectrum_list(self):
+        """Return spectra_list filtered by min/max absorbance if inputs are provided."""
+        if not self.spectrum_list:
+            return []
+
+        try:
+            min_val = float(self.abs_min_input.text()
+                            ) if self.abs_min_input.text() else None
+        except ValueError:
+            min_val = None
+
+        try:
+            max_val = float(self.abs_max_input.text()
+                            ) if self.abs_max_input.text() else None
+        except ValueError:
+            max_val = None
+
+        if min_val is None and max_val is None:
+            return self.spectrum_list
+
+        filtered = []
+        for entry in self.spectrum_list:
+            new_entry = entry.copy()
+            absorbance = np.asarray(new_entry["absorbance"])
+
+            if min_val is not None:
+                absorbance = np.maximum(absorbance, min_val)
+            if max_val is not None:
+                absorbance = np.minimum(absorbance, max_val)
+
+            new_entry["absorbance"] = absorbance
+            filtered.append(new_entry)
+
+        return filtered
 
     def get_filtered_combined_list(self):
         """Return combined_list filtered by min/max absorbance if inputs are provided."""
@@ -615,6 +694,14 @@ class MainWindow(QMainWindow):
             self.smoothing_param_label.setVisible(True)
             self.smoothing_method_dropdown.setVisible(True)
             self.smoothing_method_label.setVisible(True)
+
+    def _on_plot_spectra_clicked(self):
+        if not self.get_filtered_spectrum_list():
+            QMessageBox.warning(self, "Plot Spectra",
+                                "No spectrum data to plot.")
+            return
+
+        plot_spectra(self.get_filtered_spectrum_list(), 0, -1)
 
     def _plot_3d(self):
         if not self.get_filtered_combined_list():
@@ -704,6 +791,26 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.warning(self, "Plot error",
                                 f"Error while plotting: {exc}")
+
+    def _on_export_spectra_csv_clicked(self):
+        if not self.get_filtered_spectrum_list():
+            QMessageBox.warning(self, "Spectrum Data Export",
+                                "No spectrum data to export.")
+            return
+
+        filepath = export_spectra_csv(self.get_filtered_spectrum_list(), self)
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Export Result")
+
+        if filepath:
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setText(f"CSV successfully saved:\n{filepath}")
+        else:
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setText("Export cancelled.")
+
+        msg.exec()
 
     def _on_export_combined_csv_clicked(self):
         if not self.get_filtered_combined_list():

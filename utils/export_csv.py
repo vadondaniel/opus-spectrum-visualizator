@@ -3,6 +3,55 @@ import pandas as pd
 import numpy as np
 
 
+def export_spectra_csv(
+    spectra_list,
+    parent: QWidget = None,
+):
+    """
+    Export spectra_list (list of dicts with 'wavenumbers', 'absorbance') as a simple CSV.
+
+    Output format:
+        Wavenumber, Spectrum1, Spectrum2, ...
+        4000,       0.123,    0.234,    ...
+        3999,       0.124,    0.233,    ...
+        ...
+
+    Parameters
+    ----------
+    spectra_list : list of dict
+        Each dict must contain 'wavenumbers' and 'absorbance'.
+    parent : QWidget, optional
+        Parent widget for QFileDialog.
+    """
+    if not spectra_list:
+        raise ValueError("No spectra to export.")
+
+    # Ask for save location
+    filename, _ = QFileDialog.getSaveFileName(
+        parent,
+        "Save Spectra as CSV",
+        "spectra.csv",
+        "CSV Files (*.csv)"
+    )
+
+    if not filename:  # user cancelled
+        return None
+
+    # Assume all spectra have same wavenumbers
+    wavenumbers = np.asarray(spectra_list[0]["wavenumbers"])
+    absorbances = [np.asarray(entry["absorbance"]) for entry in spectra_list]
+
+    # Build dataframe: col0 = Wavenumber, others = Spectrum1, Spectrum2...
+    data = {"Wavenumber": wavenumbers}
+    for i, arr in enumerate(absorbances, start=1):
+        data[f"Spectrum{i}"] = arr
+
+    df = pd.DataFrame(data)
+
+    df.to_csv(filename, index=False, float_format="%.6f")
+    return filename
+
+
 def export_combined_data_csv(
     combined_list,
     parent: QWidget = None,
