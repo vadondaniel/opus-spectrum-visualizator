@@ -102,12 +102,18 @@ class InfoWindow(QDialog):
         self.setLayout(layout)
 
 
-class DataProcessingApp(QMainWindow):
+class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Spectrum & Temperature Data Processor")
-        self.setGeometry(150, 150, 720, 460)
+        self._init_state()
+        self._setup_window()
+        self._setup_ui()
 
+    # ------------------------
+    # State / Window Setup
+    # ------------------------
+    def _init_state(self):
+        """Initialize application state."""
         self.spectrum_list = []
         self.temperature_list_filtered = []
         self.combined_list = []
@@ -115,34 +121,62 @@ class DataProcessingApp(QMainWindow):
         self.spectrum_path = None
         self.temp_file = None
 
-        # === Menu Bar ===
+    def _setup_window(self):
+        """Basic window properties."""
+        self.setWindowTitle("Spectrum & Temperature Data Processor")
+        self.setGeometry(150, 150, 720, 460)
+
+    # ------------------------
+    # UI Setup
+    # ------------------------
+    def _setup_ui(self):
+        """Create the full UI layout."""
+        self._create_menu_bar()
+
+        central_widget = QWidget()
+        main_layout = QVBoxLayout()
+
+        # Add each group box section
+        main_layout.addWidget(self._create_file_selection_group())
+        main_layout.addWidget(self._create_processing_group())
+        main_layout.addWidget(self._create_absorbance_group())
+        main_layout.addWidget(self._create_visualization_group())
+        main_layout.addWidget(self._create_peak_analysis_group())
+
+        central_widget.setLayout(main_layout)
+        self.setCentralWidget(central_widget)
+
+    # ------------------------
+    # Menu Bar
+    # ------------------------
+    def _create_menu_bar(self):
         menubar = self.menuBar()
         help_menu = menubar.addMenu("Help")
 
-        # How To Use action
+        # How To Use
         howto_action = help_menu.addAction("How To Use")
         howto_action.setToolTip(
             "Show instructions on how to use the application")
         howto_action.triggered.connect(self.show_howto)
 
-        # Credits action
+        # Credits
         credits_action = help_menu.addAction("Credits")
         credits_action.setToolTip("Show credits and acknowledgments")
         credits_action.triggered.connect(self.show_credits)
 
-        # === Central Widget ===
-        central_widget = QWidget()
-        main_layout = QVBoxLayout()
+        return menubar
 
-        # === File Selection Section ===
-        file_group = QGroupBox("Data Selection")
-        file_layout = QVBoxLayout()
-        file_layout.setSpacing(10)
-        file_layout.setContentsMargins(12, 8, 12, 8)
+    # ------------------------
+    # File Selection
+    # ------------------------
+    def _create_file_selection_group(self):
+        group = QGroupBox("Data Selection")
+        layout = QVBoxLayout()
+        layout.setSpacing(10)
+        layout.setContentsMargins(12, 8, 12, 8)
 
-        # Spectrum selection row
+        # Spectrum row
         spec_layout = QHBoxLayout()
-        spec_layout.setSpacing(10)
         self.spectrum_label = QLabel("No folder selected")
         self.spectrum_label.setStyleSheet("color: gray;")
         self.spectrum_btn = QPushButton("Browse")
@@ -155,9 +189,8 @@ class DataProcessingApp(QMainWindow):
         spec_layout.addStretch()
         spec_layout.addWidget(self.spectrum_btn)
 
-        # Temperature selection row
+        # Temperature row
         temp_layout = QHBoxLayout()
-        temp_layout.setSpacing(10)
         self.temp_label = QLabel("No file selected")
         self.temp_label.setStyleSheet("color: gray;")
         self.temp_btn = QPushButton("Browse")
@@ -169,57 +202,58 @@ class DataProcessingApp(QMainWindow):
         temp_layout.addStretch()
         temp_layout.addWidget(self.temp_btn)
 
-        # Combine rows
-        file_layout.addLayout(spec_layout)
-        file_layout.addLayout(temp_layout)
-        file_group.setLayout(file_layout)
-        main_layout.addWidget(file_group)
+        layout.addLayout(spec_layout)
+        layout.addLayout(temp_layout)
+        group.setLayout(layout)
+        return group
 
-        # === Processing Section ===
-        process_group = QGroupBox("Processing")
-        process_layout = QVBoxLayout()
-        process_layout.setSpacing(12)
-        process_layout.setContentsMargins(12, 8, 12, 8)
+    # ------------------------
+    # Processing
+    # ------------------------
+    def _create_processing_group(self):
+        group = QGroupBox("Processing")
+        layout = QVBoxLayout()
+        layout.setSpacing(12)
+        layout.setContentsMargins(12, 8, 12, 8)
 
-        # Start Processing button
+        # Start button
         self.process_btn = QPushButton("Start Processing")
         self.process_btn.setFixedWidth(140)
         self.process_btn.setToolTip(
             "Start processing spectrum and temperature data")
         self.process_btn.clicked.connect(self.start_processing)
         self.process_btn.setEnabled(False)
-        process_layout.addWidget(
-            self.process_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.process_btn,
+                         alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Helper function to create a progress row
-        def create_progress_row(label_text):
-            row = QHBoxLayout()
-            label = QLabel(label_text)
-            label.setFixedWidth(100)
-            progress = QProgressBar()
-            progress.setFormat("%p%")
-            row.addWidget(label)
-            row.addWidget(progress)
-            return row, progress
+        # Progress rows
+        spec_row, self.spec_progress = self._create_progress_row("Spectrum:")
+        temp_row, self.temp_progress = self._create_progress_row(
+            "Temperature:")
+        comb_row, self.combine_progress = self._create_progress_row("Combine:")
+        layout.addLayout(spec_row)
+        layout.addLayout(temp_row)
+        layout.addLayout(comb_row)
 
-        # Spectrum progress
-        spec_row, self.spec_progress = create_progress_row("Spectrum:")
-        process_layout.addLayout(spec_row)
+        group.setLayout(layout)
+        return group
 
-        # Temperature progress
-        temp_row, self.temp_progress = create_progress_row("Temperature:")
-        process_layout.addLayout(temp_row)
+    def _create_progress_row(self, label_text):
+        row = QHBoxLayout()
+        label = QLabel(label_text)
+        label.setFixedWidth(100)
+        progress = QProgressBar()
+        progress.setFormat("%p%")
+        row.addWidget(label)
+        row.addWidget(progress)
+        return row, progress
 
-        # Combine progress
-        comb_row, self.combine_progress = create_progress_row("Combine:")
-        process_layout.addLayout(comb_row)
-
-        process_group.setLayout(process_layout)
-        main_layout.addWidget(process_group)
-        
-        # === Absorbance Range Filter ===
-        absorbance_group = QGroupBox("Absorbance Range Filter")
-        abs_layout = QHBoxLayout()
+    # ------------------------
+    # Absorbance
+    # ------------------------
+    def _create_absorbance_group(self):
+        group = QGroupBox("Absorbance Range Filter")
+        layout = QHBoxLayout()
 
         self.abs_min_input = QLineEdit()
         self.abs_min_input.setPlaceholderText("Min (e.g., 0)")
@@ -229,19 +263,22 @@ class DataProcessingApp(QMainWindow):
         self.abs_max_input.setPlaceholderText("Max (e.g., 1)")
         self.abs_max_input.setFixedWidth(80)
 
-        abs_layout.addWidget(QLabel("Min:"))
-        abs_layout.addWidget(self.abs_min_input)
-        abs_layout.addWidget(QLabel("Max:"))
-        abs_layout.addWidget(self.abs_max_input)
-        abs_layout.addStretch()
-        absorbance_group.setLayout(abs_layout)
-        main_layout.addWidget(absorbance_group)
+        layout.addWidget(QLabel("Min:"))
+        layout.addWidget(self.abs_min_input)
+        layout.addWidget(QLabel("Max:"))
+        layout.addWidget(self.abs_max_input)
+        layout.addStretch()
+        group.setLayout(layout)
+        return group
 
-        # === 3D Plotting ===
-        vis_group = QGroupBox("3D Plotting")
-        vis_layout = QHBoxLayout()
-        vis_layout.setSpacing(10)
-        vis_layout.setContentsMargins(10, 6, 10, 6)
+    # ------------------------
+    # Visualization
+    # ------------------------
+    def _create_visualization_group(self):
+        group = QGroupBox("3D Plotting")
+        layout = QHBoxLayout()
+        layout.setSpacing(10)
+        layout.setContentsMargins(10, 6, 10, 6)
 
         # Plot type
         self.plot_type_dropdown = QComboBox()
@@ -263,43 +300,45 @@ class DataProcessingApp(QMainWindow):
         self.smoothing_input.setFixedWidth(110)
         self.smoothing_input.setToolTip("Enter smoothing factor (optional)")
 
-        # CSV Button
+        # Buttons
         self.combined_export_btn = QPushButton("Export as CSV")
         self.combined_export_btn.setFixedWidth(100)
         self.combined_export_btn.clicked.connect(
             self._on_export_combined_csv_clicked)
         self.combined_export_btn.setEnabled(False)
 
-        # Plot button
         self.plot_btn = QPushButton("Plot 3D")
         self.plot_btn.setFixedWidth(90)
         self.plot_btn.clicked.connect(self._plot_3d)
         self.plot_btn.setEnabled(False)
 
-        # Add widgets with labels
-        vis_layout.addWidget(QLabel("Type:"))
-        vis_layout.addWidget(self.plot_type_dropdown)
-        vis_layout.addSpacing(10)
-        vis_layout.addWidget(QLabel("Colormap:"))
-        vis_layout.addWidget(self.cmap_dropdown)
-        vis_layout.addSpacing(10)
-        vis_layout.addWidget(QLabel("Smoothing:"))
-        vis_layout.addWidget(self.smoothing_input)
-        vis_layout.addStretch()
-        vis_layout.addWidget(self.combined_export_btn)
-        vis_layout.addWidget(self.plot_btn)
+        # Assemble
+        layout.addWidget(QLabel("Type:"))
+        layout.addWidget(self.plot_type_dropdown)
+        layout.addSpacing(10)
+        layout.addWidget(QLabel("Colormap:"))
+        layout.addWidget(self.cmap_dropdown)
+        layout.addSpacing(10)
+        layout.addWidget(QLabel("Smoothing:"))
+        layout.addWidget(self.smoothing_input)
+        layout.addStretch()
+        layout.addWidget(self.combined_export_btn)
+        layout.addWidget(self.plot_btn)
 
-        vis_group.setLayout(vis_layout)
-        main_layout.addWidget(vis_group)
+        group.setLayout(layout)
+        return group
 
-        # === Peak Analysis ===
-        peak_group = QGroupBox("Peak Analysis")
+    # ------------------------
+    # Peak Analysis
+    # ------------------------
+    def _create_peak_analysis_group(self):
+        group = QGroupBox("Peak Analysis")
         grid = QGridLayout()
         grid.setHorizontalSpacing(8)
         grid.setVerticalSpacing(8)
         grid.setContentsMargins(10, 6, 10, 6)
 
-        # Row 0: Ranges (full width)
+        # Row 0: Range(s)
         self.wavelength_range_input = QLineEdit()
         self.wavelength_range_input.setPlaceholderText(
             "950-1050, 2450-2550, 3050-3150, ...")
@@ -321,7 +360,6 @@ class DataProcessingApp(QMainWindow):
         self.display_type_dropdown.setToolTip("Select how to plot")
         self.display_type_dropdown.setFixedWidth(100)
 
-        self.smoothing_method_label = QLabel("Smoothing Method:")
         self.smoothing_method_dropdown = QComboBox()
         self.smoothing_method_dropdown.addItems(
             ["gaussian", "loess", "spline", "boxcar"])
@@ -329,7 +367,6 @@ class DataProcessingApp(QMainWindow):
             "Select the method of smoothing")
         self.smoothing_method_dropdown.setFixedWidth(110)
 
-        self.smoothing_param_label = QLabel("Param:")
         self.smoothing_param_spin = QDoubleSpinBox()
         self.smoothing_param_spin.setDecimals(3)
         self.smoothing_param_spin.setRange(0.0, 1e6)
@@ -342,48 +379,45 @@ class DataProcessingApp(QMainWindow):
         self.peak_btn.clicked.connect(self._plot_absorption)
         self.peak_btn.setEnabled(False)
 
-        # place them in the grid
+        # Place widgets
         grid.addWidget(QLabel("Display:"), 1, 0)
         grid.addWidget(self.display_type_dropdown, 1, 1)
-
+        self.smoothing_method_label = QLabel("Smoothing Method:")
         grid.addWidget(self.smoothing_method_label, 1, 2)
         grid.addWidget(self.smoothing_method_dropdown, 1, 3)
-
+        self.smoothing_param_label = QLabel("Param:")
         grid.addWidget(self.smoothing_param_label, 1, 4)
         grid.addWidget(self.smoothing_param_spin, 1, 5)
 
-        # Add a spacer before the button
         spacer = QSpacerItem(
             1, 1, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         grid.addItem(spacer, 1, 6)
-
         grid.addWidget(self.peak_btn, 1, 7)
 
-        peak_group.setLayout(grid)
-        main_layout.addWidget(peak_group)
+        group.setLayout(grid)
 
-        # connect UI changes
+        # Connect UI changes
         self.smoothing_method_dropdown.currentTextChanged.connect(
             self._update_smoothing_param_ui)
         self.display_type_dropdown.currentTextChanged.connect(
             self._on_display_changed)
-        # initialize visibility/ranges
+
+        # Initialize
         self._update_smoothing_param_ui(
             self.smoothing_method_dropdown.currentText())
         self._on_display_changed(self.display_type_dropdown.currentText())
 
-        central_widget.setLayout(main_layout)
-        self.setCentralWidget(central_widget)
+        return group
 
+    # ------------------------
+    # Info Windows
+    # ------------------------
     def show_info(self, title, text):
         self.info_win = InfoWindow(title, text)
         self.info_win.show()
 
-    # === Menu action methods ===
     def show_howto(self):
-        self.show_info(
-            "How To Use",
-            """
+        self.show_info("How To Use", """
             <h2>How To Use</h2>
             <ol>
                 <li>Select a <b>folder</b> containing <b>OPUS files</b> and a <b>Temperature file</b>.</li>
@@ -391,13 +425,10 @@ class DataProcessingApp(QMainWindow):
                 <li>Use <b>Visualization</b> to plot 3D (Surface or Scatter, choose colormap, optional smoothing).</li>
                 <li>Use <b>Range Comparison</b> to enter ranges (e.g. <code>950-1050, 3050-3150</code>) and compare absorption.</li>
             </ol>
-            """
-        )
+        """)
 
     def show_credits(self):
-        self.show_info(
-            "Credits",
-            """
+        self.show_info("Credits", """
             <h2>Credits</h2>
             <p>This application was built using the following libraries:
             <ul>
@@ -409,8 +440,7 @@ class DataProcessingApp(QMainWindow):
             </ul>
             <b>Developed by:</b> Dániel Vadon & Dr. Bálint Rubovszky</p>
             <p><b>Version:</b> 1.1 <a href="https://github.com/vadondaniel/opus-spectrum-visualizator">GitHub</a></p>
-            """
-        )
+        """)
 
     # === Slots ===
     def select_spectrum_folder(self):
@@ -508,33 +538,35 @@ class DataProcessingApp(QMainWindow):
         """Return combined_list filtered by min/max absorbance if inputs are provided."""
         if not self.combined_list:
             return []
-    
+
         try:
-            min_val = float(self.abs_min_input.text()) if self.abs_min_input.text() else None
+            min_val = float(self.abs_min_input.text()
+                            ) if self.abs_min_input.text() else None
         except ValueError:
             min_val = None
-    
+
         try:
-            max_val = float(self.abs_max_input.text()) if self.abs_max_input.text() else None
+            max_val = float(self.abs_max_input.text()
+                            ) if self.abs_max_input.text() else None
         except ValueError:
             max_val = None
-    
+
         if min_val is None and max_val is None:
             return self.combined_list
-    
+
         filtered = []
         for entry in self.combined_list:
             new_entry = entry.copy()
             absorbance = new_entry["absorbance"]
-    
+
             if min_val is not None:
                 absorbance = np.maximum(absorbance, min_val)
             if max_val is not None:
                 absorbance = np.minimum(absorbance, max_val)
-    
+
             new_entry["absorbance"] = absorbance
             filtered.append(new_entry)
-    
+
         return filtered
 
     def _update_smoothing_param_ui(self, method: str):
@@ -572,8 +604,8 @@ class DataProcessingApp(QMainWindow):
             self.smoothing_param_spin.setValue(5.0)
 
     def _on_display_changed(self, display_text: str):
-        """If user chooses 'raw' hide smoothing param since it won't be applied."""
-        if display_text == "raw":
+        """If user chooses 'Raw' hide smoothing param since it won't be applied."""
+        if display_text == "Raw":
             self.smoothing_param_spin.setVisible(False)
             self.smoothing_param_label.setVisible(False)
             self.smoothing_method_dropdown.setVisible(False)
@@ -768,7 +800,7 @@ def launch_app():
     if not icon.isNull():
         app.setWindowIcon(icon)
 
-    window = DataProcessingApp()
+    window = MainWindow()
     window.setWindowTitle("Opus Spectrum Visualizator")
     if not icon.isNull():
         window.setWindowIcon(icon)
