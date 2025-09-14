@@ -84,6 +84,10 @@ It will be at `Output/OpusSpectrumVisualizatorInstaller.exe`
 
   <img src="images/main_ui.png" alt="Main UI" width="600">
 
+### Spectral Data Visualization
+
+  <img src="images/spectra_plot.png" alt="3D Surface Plot" width="600">  
+
 ### 3D Visualization
 
   <img src="images/surface_plot.png" alt="3D Surface Plot" width="600">  
