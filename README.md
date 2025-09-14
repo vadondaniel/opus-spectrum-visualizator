@@ -84,7 +84,7 @@ The executable will appear in the `/dist/` folder as `main.exe`
 
 The installer will appear in the `/Output/` folder as `OpusSpectrumVisualizatorInstaller.exe`
 
-> Using a version installed with the installer starts considerably faster than a single executable file from step 4 above.
+> Using a version installed with the installer starts considerably faster than a standalone executable file from step 4 above.
 
 ---
 
