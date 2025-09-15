@@ -365,6 +365,26 @@ def plot_absorption_vs_temperature(
             for e in combined_list
         ], dtype=float)[sort_idx]
 
+        # --- Baseline correction: force first and last point to zero ---
+        x0, x1 = temperatures[0], temperatures[-1]
+        y0, y1 = summed_absorbance[0], summed_absorbance[-1]
+
+        # Linear baseline between first and last point
+        baseline = y0 + (y1 - y0) * (temperatures - x0) / (x1 - x0)
+
+        # Subtract baseline so curve starts and ends at zero
+        # summed_absorbance = summed_absorbance - baseline
+
+        # --- Baseline correction: force last point to match the first ---
+        x0, x1 = temperatures[0], temperatures[-1]
+        y0, y1 = summed_absorbance[0], summed_absorbance[-1]
+
+        # Linear baseline between first and last point
+        baseline = y0 + (y1 - y0) * (temperatures - x0) / (x1 - x0)
+
+        # Subtract only the drift part (keep the first level)
+        summed_absorbance = summed_absorbance - (baseline - y0)
+
         if display_type in ("raw", "both"):
             plt.plot(
                 temperatures,
