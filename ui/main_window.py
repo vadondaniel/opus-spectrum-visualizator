@@ -21,7 +21,7 @@ from data_processing.combined_data import (
     combine_temperature_and_spectrum_data, smooth_combined_by_temperature
 )
 from utils.processing_thread import ProcessingThread
-from utils.plot import estimate_bandwidth, plot_3d
+from utils.plot import estimate_bandwidth
 from utils.export_csv import (
     export_peak_analysis_csv, export_combined_data_csv, export_spectra_csv
 )
@@ -668,9 +668,7 @@ class MainWindow(QMainWindow):
         cmap = self.cmap_dropdown.currentText()
         plot_type = self.plot_type_dropdown.currentText()
 
-        html_to_show = plot_3d(data_to_plot, plot_type, cmap, 2_000_000)
-
-        self.three_d_dialog = ThreeDPlotDialog(html_to_show, plot_type, self)
+        self.three_d_dialog = ThreeDPlotDialog(data_to_plot, plot_type, cmap, self)
         self.three_d_dialog.show()
 
     def _plot_absorption(self):
