@@ -16,11 +16,7 @@ The easiest way to install is by using the prebuilt Windows installer.
 ### 1. Download the Installer
 
 1. Go to the [Releases page on GitHub](https://github.com/vadondaniel/opus-spectrum-visualizator/releases).
-2. Download the file named similar to:
-
-   ```
-   OpusSpectrumVisualizatorInstaller.exe
-   ```
+2. Download the file named similar to: `OpusSpectrumVisualizatorInstaller.exe`
 
 ### 2. Install
 
@@ -39,7 +35,7 @@ If you want to run or modify the program from source, follow these steps:
 
 ### 1. Requirements
 
-* [Python](https://www.python.org/downloads/windows) 3.x
+- [Python](https://www.python.org/downloads/windows) 3.10+
 
 ### 2. Clone or Download the Repository
 
