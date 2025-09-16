@@ -15,6 +15,13 @@ class ThreeDPlotDialog(QDialog):
         
         self.setWindowTitle(plot_type + " Plot")
 
+        # Add standard window buttons (minimize, maximize, close)
+        self.setWindowFlags(
+            Qt.WindowType.Window |
+            Qt.WindowType.WindowMinMaxButtonsHint |
+            Qt.WindowType.WindowCloseButtonHint
+        )
+
         self.combined_data = combined_data
         self.plot_type = plot_type
         self.cmap = cmap

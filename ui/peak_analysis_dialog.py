@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 from PyQt6.QtWidgets import QDialog, QVBoxLayout
+from PyQt6.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
@@ -13,6 +14,13 @@ class PeakAnalysisDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Peak Analysis")
         self.resize(900, 600)
+
+        # Add standard window buttons (minimize, maximize, close)
+        self.setWindowFlags(
+            Qt.WindowType.Window |
+            Qt.WindowType.WindowMinMaxButtonsHint |
+            Qt.WindowType.WindowCloseButtonHint
+        )
 
         # Matplotlib Figure + Canvas
         self.fig, self.ax = plt.subplots(figsize=(10, 6))

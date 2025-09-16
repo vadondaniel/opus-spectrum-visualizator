@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QPushButton, QHBoxLayout, QGroupBox, QLabel, QSizePolicy
 )
+from PyQt6.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
@@ -16,6 +17,13 @@ class SpectraPlotDialog(QDialog):
 
         self.setWindowTitle("Spectra Plot")
         self.resize(900, 600)
+
+        # Add standard window buttons (minimize, maximize, close)
+        self.setWindowFlags(
+            Qt.WindowType.Window |
+            Qt.WindowType.WindowMinMaxButtonsHint |
+            Qt.WindowType.WindowCloseButtonHint
+        )
 
         self.spectra_data = spectra_data
         self.start_index = start_index
