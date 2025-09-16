@@ -4,102 +4,27 @@ import sys
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QFileDialog, QProgressBar, QLineEdit, QDialog,
-    QMessageBox, QComboBox, QGroupBox, QTextBrowser, QDoubleSpinBox, QGridLayout, QSpacerItem, QSizePolicy
+    QPushButton, QLabel, QFileDialog, QProgressBar, QLineEdit, QMessageBox,
+    QComboBox, QGroupBox, QDoubleSpinBox, QGridLayout, QSpacerItem, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl, QTimer
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
-from PyQt6.QtWebEngineWidgets import QWebEngineView
 import numpy as np
 
-from utils.export_csv import (
-    export_peak_analysis_csv, export_combined_data_csv, export_spectra_csv
-)
+from ui.info_window import InfoWindow
+from ui.spectra_plot_dialog import SpectraPlotDialog
+from ui.three_d_plot_dialog import ThreeDPlotDialog
+from ui.peak_analysis_dialog import PeakAnalysisDialog
 from data_processing.spectrum import process_spectrum_data
 from data_processing.temperature import process_temperature_data
-
 from data_processing.combined_data import (
     combine_temperature_and_spectrum_data, smooth_combined_by_temperature
 )
-from utils.plot import estimate_bandwidth, plot_absorption_vs_temperature, plot_3d, plot_spectra
-
-# === Worker Thread Wrapper ===
-
-
-class ProcessingThread(QThread):
-    progress_update = pyqtSignal(int)
-    result_ready = pyqtSignal(object)
-    error = pyqtSignal(str)
-
-    def __init__(self, func, *args, **kwargs):
-        super().__init__()
-        self.func = func
-        self.args = args
-        self.kwargs = kwargs
-
-    def run(self):
-        def callback(msg):
-            pct = None
-            try:
-                if isinstance(msg, str):
-                    s = msg.strip()
-                    if s.endswith("%"):
-                        s = s[:-1].strip()
-                    pct = int(float(s))
-                elif isinstance(msg, (int, float)):
-                    pct = int(msg)
-            except Exception:
-                pct = None
-
-            if pct is not None:
-                pct = max(0, min(100, pct))
-                self.progress_update.emit(pct)
-
-        try:
-            result = self.func(
-                *self.args, progress_callback=callback, **self.kwargs)
-            if result is None:
-                result = []
-            self.result_ready.emit(result)
-        except Exception as e:
-            self.error.emit(str(e))
-
-
-class InfoWindow(QDialog):
-    def __init__(self, title, text, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle(title)
-        self.setMinimumSize(500, 350)
-        self.setWindowFlags(self.windowFlags() |
-                            Qt.WindowType.WindowCloseButtonHint)
-
-        layout = QVBoxLayout()
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
-
-        # QTextBrowser for rich text display
-        self.text_browser = QTextBrowser()
-        self.text_browser.setHtml(text)
-        self.text_browser.setOpenExternalLinks(True)
-        self.text_browser.setReadOnly(True)
-        self.text_browser.setFrameStyle(
-            QTextBrowser.Shape.NoFrame)  # remove borders
-        self.text_browser.setStyleSheet("""
-            QTextBrowser {
-                border: none;
-                font-size: 12pt;
-                background: transparent;
-            }
-        """)
-        layout.addWidget(self.text_browser)
-
-        # Close button
-        close_btn = QPushButton("Close")
-        close_btn.setFixedWidth(90)
-        close_btn.clicked.connect(self.close)
-        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignRight)
-
-        self.setLayout(layout)
+from utils.processing_thread import ProcessingThread
+from utils.plot import estimate_bandwidth, plot_3d
+from utils.export_csv import (
+    export_peak_analysis_csv, export_combined_data_csv, export_spectra_csv
+)
 
 
 class MainWindow(QMainWindow):
@@ -139,12 +64,12 @@ class MainWindow(QMainWindow):
         # Add each group box section
         main_layout.addWidget(self._create_file_selection_group())
         main_layout.addWidget(self._create_processing_group())
-        
+
         abs_spec_layout = QHBoxLayout()
         abs_spec_layout.addWidget(self._create_absorbance_group())
         abs_spec_layout.addWidget(self._create_spectra_group())
         main_layout.addLayout(abs_spec_layout)
-        
+
         main_layout.addWidget(self._create_visualization_group())
         main_layout.addWidget(self._create_peak_analysis_group())
 
@@ -295,7 +220,7 @@ class MainWindow(QMainWindow):
         # Plot button
         self.plot_spectra_btn = QPushButton("Plot Spectra")
         self.plot_spectra_btn.setFixedWidth(110)
-        self.plot_spectra_btn.clicked.connect(self._on_plot_spectra_clicked)
+        self.plot_spectra_btn.clicked.connect(self._on_plot_spectra)
         self.plot_spectra_btn.setEnabled(False)
 
         # Assemble
@@ -695,13 +620,33 @@ class MainWindow(QMainWindow):
             self.smoothing_method_dropdown.setVisible(True)
             self.smoothing_method_label.setVisible(True)
 
-    def _on_plot_spectra_clicked(self):
+    def _on_plot_spectra(self):
         if not self.get_filtered_spectrum_list():
             QMessageBox.warning(self, "Plot Spectra",
                                 "No spectrum data to plot.")
             return
 
-        plot_spectra(self.get_filtered_spectrum_list(), 0, -1)
+        def save_range_callback(x_range):
+            xmin, xmax = sorted([round(x_range[0]), round(x_range[1])])
+            new_range = f"{xmin}-{xmax}"
+
+            current_text = self.wavelength_range_input.text().strip()
+            if current_text:
+                updated_text = f"{current_text}, {new_range}"
+            else:
+                updated_text = new_range
+
+            self.wavelength_range_input.setText(updated_text)
+
+        # Non-blocking popup (show instead of exec)
+        self.spectra_dialog = SpectraPlotDialog(
+            self.get_filtered_spectrum_list(),
+            start_index=0,
+            end_index=len(self.get_filtered_spectrum_list()) - 1,
+            save_callback=save_range_callback,
+            parent=self
+        )
+        self.spectra_dialog.show()
 
     def _plot_3d(self):
         if not self.get_filtered_combined_list():
@@ -725,26 +670,8 @@ class MainWindow(QMainWindow):
 
         html_to_show = plot_3d(data_to_plot, plot_type, cmap, 2_000_000)
 
-        # PyQt window
-        win = QMainWindow()
-        win.setWindowTitle(f"3D Absorbance {plot_type} Plot")
-        central_widget = QWidget()
-        layout = QVBoxLayout(central_widget)
-        view = QWebEngineView()
-        view.setUrl(QUrl.fromLocalFile(html_to_show))
-
-        def on_load_finished(ok):
-            if ok:
-                view.resize(view.width() + 1, view.height() + 1)
-                view.resize(view.width() - 1, view.height() - 1)
-
-        view.loadFinished.connect(on_load_finished)
-        layout.addWidget(view)
-        win.setCentralWidget(central_widget)
-        win.resize(1200, 800)
-        win.show()
-
-        self.window_3d = win
+        self.three_d_dialog = ThreeDPlotDialog(html_to_show, plot_type, self)
+        self.three_d_dialog.show()
 
     def _plot_absorption(self):
         if not self.get_filtered_combined_list():
@@ -778,19 +705,14 @@ class MainWindow(QMainWindow):
         if display_type != "raw":
             smoothing_param = float(self.smoothing_param_spin.value())
 
-        try:
-            plot_absorption_vs_temperature(
-                self.get_filtered_combined_list(),
-                ranges,
-                display_type=display_type,
-                smoothing=smoothing_method,
-                smoothing_param=smoothing_param,
-                eval_on_grid=True,
-                grid_points=400
-            )
-        except Exception as exc:
-            QMessageBox.warning(self, "Plot error",
-                                f"Error while plotting: {exc}")
+        self.peak_dialog = PeakAnalysisDialog(
+            combined_list=self.get_filtered_combined_list(),
+            wavelength_ranges=ranges,
+            display_type=display_type,
+            smoothing=smoothing_method,
+            smoothing_param=smoothing_param
+        )
+        self.peak_dialog.show()
 
     def _on_export_spectra_csv_clicked(self):
         if not self.get_filtered_spectrum_list():

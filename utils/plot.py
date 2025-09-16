@@ -6,84 +6,30 @@ import numpy as np
 from scipy.interpolate import UnivariateSpline
 
 
-def plot_spectra(
-        spectra_data, start_index=0, end_index=10,
-        normalize=False, progress_callback=None, index_offset=False
-):
+def plot_spectra(ax, spectra_data, start_index=0, end_index=None, normalize=False):
     """
-    Plot spectra with start/end index range.
-
-    Parameters:
-        spectra_data: List of dicts from process_spectrum_data_with_interpolation().
-        start_index: First spectrum index to plot.
-        end_index: Last spectrum index to plot (inclusive). Use -1 or None to plot all from start_index.
-        normalize: If True, normalize each spectrum to its max(abs).
-        progress_callback: Optional function to report progress.
-        index_offset: If True, use 1-based indexing for start_index and end_index.
+    Plot spectra on the given matplotlib Axes.
+    Returns nothing; just draws on the provided ax.
     """
-    if not spectra_data:
-        if progress_callback:
-            progress_callback("⚠️ No spectra to plot.")
-        else:
-            print("⚠️ No spectra to plot.")
-        return
+    if end_index is None:
+        end_index = len(spectra_data) - 1
 
-    total = len(spectra_data)
-
-    if index_offset:
-        # Convert 1-based to 0-based indices
-        start_index -= 1
-        if end_index is not None and end_index != -1:
-            end_index -= 1
-
-    if end_index is None or end_index == -1:
-        end_index = total - 1
-
-    # Clip indices to valid range
-    start_index = max(0, start_index)
-    end_index = min(total - 1, end_index)
-
-    if start_index > end_index:
-        if index_offset:
-            if progress_callback:
-                progress_callback(
-                    f"⚠️ Invalid index range: start={start_index + 1}, end={end_index + 1}")
-            else:
-                print(
-                    f"⚠️ Invalid index range: start={start_index + 1}, end={end_index + 1}")
-        else:
-            if progress_callback:
-                progress_callback(
-                    f"⚠️ Invalid index range: start={start_index}, end={end_index}")
-            else:
-                print(
-                    f"⚠️ Invalid index range: start={start_index}, end={end_index}")
-        return
-
-    spectra_to_plot = spectra_data[start_index:end_index + 1]
-
-    plt.figure(figsize=(12, 6))
+    spectra_to_plot = spectra_data[start_index:end_index+1]
 
     for i, entry in enumerate(spectra_to_plot, start=start_index):
         x = entry["wavenumbers"]
-        y = entry["absorbance"]
-
+        y = np.array(entry["absorbance"])
         if normalize:
-            y = np.array(y)
             y = y / np.max(np.abs(y)) if np.max(np.abs(y)) != 0 else y
 
-        plt.plot(x, y, label=f"Spectrum #{i+1}", alpha=0.7)
+        # Optional baseline correction
+        # y = baseline_correction(x, y)
 
-    plt.xlabel('Wavenumber (cm⁻¹)')
-    plt.ylabel('Absorbance')
-    plt.title('Spectra')
+        ax.plot(x, y, label=f"Spectrum #{i+1}", alpha=0.7)
 
-    #plt.gca().invert_xaxis()
-
-    #plt.legend(loc="best", fontsize="small")
-
-    plt.tight_layout()
-    plt.show()
+    ax.set_xlabel("Wavenumber (cm⁻¹)")
+    ax.set_ylabel("Absorbance")
+    ax.set_title("Spectra")
 
 
 def plot_temperature(
@@ -303,160 +249,88 @@ def estimate_bandwidth(temperatures):
     return float(1.06 * sd * n ** (-1/5))
 
 
-def plot_absorption_vs_temperature(
+def plot_peak_analysis(
     combined_list,
     wavelength_ranges,
-    window_size=5,                # kept for backward-compat; interpreted in K if used
     display_type="both",
-    smoothing="gaussian",         # "boxcar", "gaussian", "loess", "spline", or "none"
-    # boxcar/gaussian: bandwidth in K; loess: frac (0..1); spline: s
+    smoothing="gaussian",
     smoothing_param=None,
-    # if True, evaluate smoothed curve on a dense grid for prettier lines
+    window_size=5,
     eval_on_grid=True,
-    grid_points=300
+    grid_points=300,
+    ax=None
 ):
     """
-    Plot summed absorbance vs temperature with selectable smoothing.
-
-    Parameters:
-        combined_list (list of dict): Each dict has "temperature", "wavenumbers", "absorbance".
-        wavelength_ranges (list[tuple[float,float]]): [(start_wavenumber, end_wavenumber), ...]
-        window_size (float): Backward-compat. If smoothing='boxcar' and smoothing_param is None,
-                             this is used as the temperature window *in K*.
-        display_type (str): "raw", "smoothed", or "both".
-        smoothing (str): "boxcar" (uniform kernel in K), "gaussian" (bandwidth in K),
-                         "loess" (local linear; smoothing_param=frac 0..1),
-                         "spline" (requires SciPy; smoothing_param=s),
-                         or "none".
-        smoothing_param: See above.
-        eval_on_grid (bool): If True, smoothed curves are drawn on an evenly spaced temperature grid.
-        grid_points (int): Number of grid points when eval_on_grid=True.
+    Compute and optionally plot summed absorbance vs temperature.
+    Returns (temperatures, dict of {range: summed_absorbance}).
+    If ax is provided, plots on the given matplotlib Axes; otherwise creates new figure.
     """
     if not combined_list:
-        raise ValueError("No combined data to plot.")
+        return None, None
 
-    # Sort by temperature
     temperatures = np.array([e["temperature"]
                             for e in combined_list], dtype=float)
     sort_idx = np.argsort(temperatures)
     temperatures = temperatures[sort_idx]
 
-    plt.figure(figsize=(10, 6))
-
-    # Discrete tableau colors (10 highly distinct colors)
+    T_grid = np.linspace(temperatures.min(), temperatures.max(),
+                         grid_points) if eval_on_grid else None
+    results = {}
     base_colors = plt.cm.tab10.colors
     base_markers = ["o", "s", "D", "*", "X", "^", "h", "p", "v", "d"]
 
-    # Prepare dense grid if requested
-    T_grid = None
-    if eval_on_grid:
-        T_grid = np.linspace(temperatures.min(),
-                             temperatures.max(), int(grid_points))
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 6))
+    else:
+        fig = ax.figure
 
-    for i, (start_wavelength, end_wavelength) in enumerate(wavelength_ranges):
-        color = base_colors[i % len(base_colors)]      # cycle if >10 ranges
+    for i, (start_w, end_w) in enumerate(wavelength_ranges):
+        color = base_colors[i % len(base_colors)]
         marker = base_markers[i % len(base_markers)]
 
-        # Sum/integrate absorbance in the wavelength window for each spectrum
-        # NOTE: if your wavenumbers have non-uniform spacing, consider np.trapz instead of np.sum.
         summed_absorbance = np.array([
-            np.sum(e["absorbance"][(e["wavenumbers"] >= start_wavelength) &
-                                   (e["wavenumbers"] <= end_wavelength)])
+            np.sum(e["absorbance"][(e["wavenumbers"] >= start_w)
+                   & (e["wavenumbers"] <= end_w)])
             for e in combined_list
         ], dtype=float)[sort_idx]
 
-        # --- Baseline correction: force first and last point to zero ---
-        x0, x1 = temperatures[0], temperatures[-1]
-        y0, y1 = summed_absorbance[0], summed_absorbance[-1]
+        summed_absorbance = baseline_correction(
+            temperatures, summed_absorbance)
+        results[(start_w, end_w)] = summed_absorbance
 
-        # Linear baseline between first and last point
-        baseline = y0 + (y1 - y0) * (temperatures - x0) / (x1 - x0)
-
-        # Subtract baseline so curve starts and ends at zero
-        # summed_absorbance = summed_absorbance - baseline
-
-        # --- Baseline correction: force last point to match the first ---
-        x0, x1 = temperatures[0], temperatures[-1]
-        y0, y1 = summed_absorbance[0], summed_absorbance[-1]
-
-        # Linear baseline between first and last point
-        baseline = y0 + (y1 - y0) * (temperatures - x0) / (x1 - x0)
-
-        # Subtract only the drift part (keep the first level)
-        summed_absorbance = summed_absorbance - (baseline - y0)
-
-        if display_type in ("raw", "both"):
-            plt.plot(
-                temperatures,
-                summed_absorbance,
-                marker=marker,
-                linestyle='-',
-                color=color,
-                label=f"{start_wavelength}-{end_wavelength}"
-            )
+        # --- smoothing ---
+        x_eval = T_grid if eval_on_grid else temperatures
+        smoothed = None
+        param = smoothing_param if smoothing_param is not None else (
+            window_size if smoothing in ("boxcar", "gaussian") else 0.3)
 
         if display_type in ("smoothed", "both") and smoothing != "none":
-            # Decide parameter defaults and evaluation x-axis
-            if smoothing_param is None:
-                smoothing_param = window_size if smoothing in (
-                    "boxcar", "gaussian") else (0.3 if smoothing == "loess" else 0.0)
-
-            x_eval = T_grid if eval_on_grid else temperatures
-
             if smoothing == "boxcar":
-                width = float(smoothing_param)
-                # Uniform (boxcar) kernel in temperature units (K)
+                width = float(param)
                 smoothed = np.array([
                     np.mean(summed_absorbance[np.abs(
-                        temperatures - T0) <= width/2])
+                        temperatures - T0) <= width / 2])
                     for T0 in x_eval
-                ], dtype=float)
-
+                ])
             elif smoothing == "gaussian":
-                _, smoothed = _gaussian_kernel_smooth(temperatures, summed_absorbance,
-                                                      bandwidth=float(
-                                                          smoothing_param),
-                                                      x_eval=x_eval)
-
+                _, smoothed = gaussian_kernel_smooth(
+                    temperatures, summed_absorbance, float(param), x_eval=x_eval)
             elif smoothing == "loess":
-                _, smoothed = _loess_1d(temperatures, summed_absorbance,
-                                        frac=float(smoothing_param),
-                                        degree=1, x_eval=x_eval)
-
+                _, smoothed = loess_1d(
+                    temperatures, summed_absorbance, frac=float(param), x_eval=x_eval)
             elif smoothing == "spline":
-                # Ensure strength in 0–1
-                strength = float(
-                    smoothing_param) if smoothing_param is not None else 0.5
-                strength = np.clip(strength, 0.0, 1.0)
+                smoothed = spline_safe_normalized(
+                    temperatures, summed_absorbance, x_eval, float(param))
 
-                x_eval = T_grid if eval_on_grid else temperatures
-                smoothed = _spline_safe_normalized(
-                    temperatures, summed_absorbance, x_eval, strength)
+        # --- plotting ---
+        if display_type in ("raw", "both"):
+            ax.plot(temperatures, summed_absorbance, marker=marker,
+                    linestyle='-', color=color, label=f"{start_w}-{end_w}")
+        if smoothed is not None:
+            ax.plot(x_eval, smoothed, linestyle='--', linewidth=2, color=color)
 
-            else:
-                smoothed = None
-
-            if smoothed is not None:
-                if display_type == "smoothed":
-                    plt.plot(
-                        x_eval,
-                        smoothed,
-                        linestyle='--',
-                        linewidth=2,
-                        color=color,
-                        label=f"{start_wavelength}-{end_wavelength}"
-                    )
-                else:
-                    plt.plot(
-                        x_eval,
-                        smoothed,
-                        linestyle='--',
-                        linewidth=2,
-                        color=color,
-                    )
-
-    plt.xlabel("Temperature (K)")
-    plt.ylabel("Integrated Absorbance (Area under curve)")
+    ax.set_xlabel("Temperature (K)")
+    ax.set_ylabel("Integrated Absorbance")
     if len(wavelength_ranges) == 1:
         title = "Peak Analysis"
     elif len(wavelength_ranges) == 2:
@@ -465,49 +339,26 @@ def plot_absorption_vs_temperature(
         title = "Triple Peak Analysis"
     else:
         title = f"Multi-Peak Analysis ({len(wavelength_ranges)} ranges)"
-    plt.title(title)
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    ax.set_title(title)
+    ax.grid(True)
+    ax.legend()
+    fig.tight_layout()
+    return temperatures, results
 
 
-def _spline_safe_normalized(x, y, x_eval, strength=0.5):
-    """
-    Spline smoothing with normalized y to make 0-1 slider perceptually linear across datasets.
-
-    Parameters
-    ----------
-    x : array-like
-        Independent variable
-    y : array-like
-        Dependent variable
-    x_eval : array-like
-        Points to evaluate the spline at
-    strength : float
-        0-1 slider; 0 = minimal smoothing, 1 = maximal smoothing
-    """
+def spline_safe_normalized(x, y, x_eval, strength=0.5):
+    if UnivariateSpline is None:
+        raise RuntimeError("SciPy is required for spline smoothing")
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
-
-    # Normalize y to [0,1]
     y_min, y_max = np.min(y), np.max(y)
-    if y_max - y_min > 0:
-        y_norm = (y - y_min) / (y_max - y_min)
-    else:
-        y_norm = y - y_min  # constant array
-
-    # Spline smoothing: s = s_min + strength * s_max
+    y_norm = (y - y_min) / (y_max - y_min) if y_max - y_min > 0 else y - y_min
     s_min = 1e-12
-    s_max = np.sum((y_norm - np.mean(y_norm))**2)
+    s_max = np.sum((y_norm - np.mean(y_norm)) ** 2)
     s_val = s_min + strength * (s_max - s_min)
-
     spline = UnivariateSpline(x, y_norm, s=s_val)
     y_smooth_norm = spline(x_eval)
-
-    # Rescale back to original range
-    y_smooth = y_smooth_norm * (y_max - y_min) + y_min
-    return y_smooth
+    return y_smooth_norm * (y_max - y_min) + y_min
 
 
 def _moving_average(data, window_size):
@@ -515,25 +366,20 @@ def _moving_average(data, window_size):
     return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
 
 
-def _gaussian_kernel_smooth(x, y, bandwidth, x_eval=None):
-    """Gaussian kernel smoother with bandwidth in same units as x (e.g., K)."""
+def gaussian_kernel_smooth(x, y, bandwidth, x_eval=None):
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     if x_eval is None:
         x_eval = x
     x_col = x.reshape(-1, 1)
     x_eval_row = np.asarray(x_eval).reshape(1, -1)
-    w = np.exp(-0.5 * ((x_col - x_eval_row) / float(bandwidth))**2)  # (n, m)
+    w = np.exp(-0.5 * ((x_col - x_eval_row) / float(bandwidth))**2)
     y_s = (w * y.reshape(-1, 1)).sum(axis=0) / \
         np.clip(w.sum(axis=0), 1e-12, None)
     return np.asarray(x_eval), y_s
 
 
-def _loess_1d(x, y, frac=0.3, degree=1, x_eval=None):
-    """
-    Minimal LOESS (tricube weights, local polynomial of given degree).
-    frac is the fraction of points used in each local fit (0 < frac <= 1).
-    """
+def loess_1d(x, y, frac=0.3, degree=1, x_eval=None):
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     n = len(x)
@@ -541,25 +387,28 @@ def _loess_1d(x, y, frac=0.3, degree=1, x_eval=None):
     if x_eval is None:
         x_eval = x
     x_eval = np.asarray(x_eval, dtype=float)
-
     y_fit = np.empty_like(x_eval, dtype=float)
     for j, x0 in enumerate(x_eval):
         dist = np.abs(x - x0)
-        idx = np.argpartition(dist, r-1)[:r]         # r nearest neighbors
+        idx = np.argpartition(dist, r - 1)[:r]
         di = dist[idx]
         dmax = di.max()
         if dmax == 0:
             y_fit[j] = y[idx].mean()
             continue
-        w = (1 - (di / dmax)**3)**3                  # tricube weights
-        # Center x at x0 for numerical stability
-        X = np.vander(x[idx] - x0, N=degree+1,
-                      increasing=True)  # [1, (x-x0), ...]
-        # Weighted least squares using sqrt weights
+        w = (1 - (di / dmax) ** 3) ** 3
+        X = np.vander(x[idx] - x0, N=degree + 1, increasing=True)
         Wsqrt = np.sqrt(w)
         Xw = X * Wsqrt[:, None]
         yw = y[idx] * Wsqrt
         beta, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
-        # at x0, (x-x0)=0 → value = intercept
         y_fit[j] = beta[0]
     return x_eval, y_fit
+
+
+def baseline_correction(temperatures, absorbance):
+    """Linear baseline between first and last points."""
+    x0, x1 = temperatures[0], temperatures[-1]
+    y0, y1 = absorbance[0], absorbance[-1]
+    baseline = y0 + (y1 - y0) * (temperatures - x0) / (x1 - x0)
+    return absorbance - (baseline - y0)
