@@ -1,10 +1,11 @@
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QPushButton, QHBoxLayout
+    QDialog, QVBoxLayout, QPushButton, QHBoxLayout, QGroupBox, QLabel, QSizePolicy
 )
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
 
+from ui.q_range_slider import QRangeSlider
 from utils.plot import plot_spectra
 
 
@@ -33,9 +34,27 @@ class SpectraPlotDialog(QDialog):
         # Layout
         layout = QVBoxLayout(self)
         layout.addWidget(self.toolbar)
-        layout.addWidget(self.canvas)
+        layout.addWidget(self.canvas, stretch=1)
 
-        # Button row (Qt buttons, not matplotlib!)
+        # --- Index range slider group ---
+        idx_group = QGroupBox("Spectra index range")
+        idx_layout = QHBoxLayout()
+        idx_layout.setContentsMargins(4, 4, 4, 4)
+        idx_layout.setSpacing(6)
+
+        self.idx_slider = QRangeSlider(0, len(self.spectra_data) - 1)
+        self.idx_slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.idx_label = QLabel("All")
+        self.idx_label.setFixedWidth(50)
+        self.idx_slider.rangeChanged.connect(self._on_index_change)
+
+        idx_layout.addWidget(self.idx_slider, stretch=1)
+        idx_layout.addWidget(self.idx_label, stretch=0)
+        idx_group.setLayout(idx_layout)
+
+        layout.addWidget(idx_group)
+
+        # --- Button row ---
         button_layout = QHBoxLayout()
         self.save_btn = QPushButton("Insert Selected Range into Peak Analysis")
         self.close_btn = QPushButton("Close")
@@ -48,7 +67,13 @@ class SpectraPlotDialog(QDialog):
 
         layout.addLayout(button_layout)
 
-        # Plot spectra
+        # Initial plot
+        self._plot_spectra()
+
+    def _on_index_change(self, *_):
+        self.start_index = int(self.idx_slider.lowerValue())
+        self.end_index = int(self.idx_slider.upperValue())
+        self.idx_label.setText(f"{self.start_index} – {self.end_index}")
         self._plot_spectra()
 
     def _plot_spectra(self):
