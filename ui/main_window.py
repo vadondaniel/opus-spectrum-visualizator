@@ -399,7 +399,7 @@ class MainWindow(QMainWindow):
                 <li><a href="https://github.com/spectrochempy/spectrochempy">SpectroChemPy</a> (CeCILL-B/C): OPUS file handling and spectroscopic data processing</li>
             </ul>
             <b>Developed by:</b> Dániel Vadon & Dr. Bálint Rubovszky</p>
-            <p><b>Version:</b> 1.2 <a href="https://github.com/vadondaniel/opus-spectrum-visualizator">GitHub</a></p>
+            <p><b>Version:</b> 1.3 <a href="https://github.com/vadondaniel/opus-spectrum-visualizator">GitHub</a></p>
         """)
 
     # === Slots ===
