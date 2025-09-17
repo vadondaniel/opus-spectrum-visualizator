@@ -23,6 +23,7 @@ class PeakAnalysisDialog(QDialog):
         self.display_type = display_type
         self.smoothing_method = smoothing
         self.smoothing_param = smoothing_param
+        self.baseline_method = "original"
 
         # --- Matplotlib figure ---
         self.fig, self.ax = plt.subplots(figsize=(10, 6))
@@ -62,6 +63,14 @@ class PeakAnalysisDialog(QDialog):
         self.smoothing_param_spin.setValue(self.smoothing_param)
         self.smoothing_param_spin.setFixedWidth(110)
         self.smoothing_param_spin.valueChanged.connect(self._update_smoothing_param_value)
+        
+        # Baseline method dropdown
+        self.baseline_method_dropdown = QComboBox()
+        self.baseline_method_dropdown.addItems(["original", "same", "zero"])
+        self.baseline_method_dropdown.setCurrentText(self.baseline_method)
+        self.baseline_method_dropdown.setToolTip("Select the method of baseline correction")
+        self.baseline_method_dropdown.setFixedWidth(110)
+        self.baseline_method_dropdown.currentTextChanged.connect(self._on_baseline_changed)
 
         # Assemble settings layout
         settings_layout.addWidget(QLabel("Display:"))
@@ -72,6 +81,9 @@ class PeakAnalysisDialog(QDialog):
         settings_layout.addSpacing(10)
         settings_layout.addWidget(QLabel("Param:"))
         settings_layout.addWidget(self.smoothing_param_spin)
+        settings_layout.addSpacing(10)
+        settings_layout.addWidget(QLabel("Baseline Method:"))
+        settings_layout.addWidget(self.baseline_method_dropdown)
         settings_layout.addStretch()
 
         settings_group.setLayout(settings_layout)
@@ -117,6 +129,10 @@ class PeakAnalysisDialog(QDialog):
     def _update_smoothing_param_value(self, value):
         self.smoothing_param = value
         self._plot()
+        
+    def _on_baseline_changed(self, text):
+        self.baseline_method = text.lower()
+        self._plot()
 
     def _plot(self):
         """Call the plotting function safely, clearing axes and handling smoothed-only legend."""
@@ -128,6 +144,7 @@ class PeakAnalysisDialog(QDialog):
             display_type=self.display_type,
             smoothing=self.smoothing_method,
             smoothing_param=self.smoothing_param,
+            baseline_correction_mode=self.baseline_method,
             eval_on_grid=True,
             grid_points=300,
             ax=self.ax
