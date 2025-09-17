@@ -17,11 +17,9 @@ from ui.three_d_plot_dialog import ThreeDPlotDialog
 from ui.peak_analysis_dialog import PeakAnalysisDialog
 from data_processing.spectrum import process_spectrum_data
 from data_processing.temperature import process_temperature_data
-from data_processing.combined_data import (
-    combine_temperature_and_spectrum_data, smooth_combined_by_temperature
-)
+from data_processing.combined_data import combine_temperature_and_spectrum_data
 from utils.processing_thread import ProcessingThread
-from utils.plot import estimate_bandwidth
+from utils.smoothing import estimate_bandwidth
 from utils.export_csv import (
     export_peak_analysis_csv, export_combined_data_csv, export_spectra_csv
 )
@@ -649,26 +647,23 @@ class MainWindow(QMainWindow):
         self.spectra_dialog.show()
 
     def _plot_3d(self):
-        if not self.get_filtered_combined_list():
+        data_to_plot = self.get_filtered_combined_list()
+        if not data_to_plot:
             QMessageBox.warning(self, "Plot 3D", "No combined data to plot.")
             return
-
-        data_to_plot = self.get_filtered_combined_list()
-
-        if self.smoothing_input.text() and int(self.smoothing_input.text()) != 0:
-            try:
-                temp_window = float(self.smoothing_input.text()) / 10
-                data_to_plot = smooth_combined_by_temperature(
-                    data_to_plot, temp_window=temp_window)
-            except ValueError:
-                QMessageBox.warning(self, "Smoothing",
-                                    "Invalid smoothing value.")
-                return
 
         cmap = self.cmap_dropdown.currentText()
         plot_type = self.plot_type_dropdown.currentText()
 
-        self.three_d_dialog = ThreeDPlotDialog(data_to_plot, plot_type, cmap, self)
+        smoothing_factor = self.smoothing_input.text() or None
+
+        self.three_d_dialog = ThreeDPlotDialog(
+            data_to_plot,
+            plot_type,
+            cmap,
+            smoothing_factor,
+            self
+        )
         self.three_d_dialog.show()
 
     def _plot_absorption(self):

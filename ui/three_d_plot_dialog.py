@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QLabel, QGroupBox, QHBoxLayout, QSizePolicy
+    QDialog, QVBoxLayout, QLabel, QGroupBox, QHBoxLayout,
+    QSizePolicy, QComboBox, QLineEdit, QMessageBox
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtCore import Qt, QUrl
@@ -10,12 +11,10 @@ from utils.plot import plot_3d
 
 
 class ThreeDPlotDialog(QDialog):
-    def __init__(self, combined_data, plot_type, cmap, parent=None):
+    def __init__(self, combined_data, plot_type, cmap, smoothing_factor=None, parent=None):
         super().__init__(parent)
-        
-        self.setWindowTitle(plot_type + " Plot")
 
-        # Add standard window buttons (minimize, maximize, close)
+        self.setWindowTitle(plot_type + " Plot")
         self.setWindowFlags(
             Qt.WindowType.Window |
             Qt.WindowType.WindowMinMaxButtonsHint |
@@ -25,66 +24,100 @@ class ThreeDPlotDialog(QDialog):
         self.combined_data = combined_data
         self.plot_type = plot_type
         self.cmap = cmap
+        self.smoothing_factor = smoothing_factor
 
         self.wavenumbers = np.array(combined_data[0]["wavenumbers"])
         self.temperatures = np.array([e["temperature"] for e in combined_data])
 
         main_layout = QVBoxLayout(self)
 
-        # Web view (plot first)
+        # --- Web view ---
         self.view = QWebEngineView()
-        self.view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.view.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                QSizePolicy.Policy.Expanding)
         main_layout.addWidget(self.view, stretch=1)
-        
+
         # Force repaint after load to avoid blank view
         def on_load_finished(ok):
             if ok:
                 self.view.resize(self.view.width() + 1, self.view.height() + 1)
                 self.view.resize(self.view.width() - 1, self.view.height() - 1)
-
         self.view.loadFinished.connect(on_load_finished)
 
         # --- Wavenumber range group ---
         wn_group = QGroupBox("Wavenumber range (cm⁻¹)")
         wn_layout = QHBoxLayout()
-        wn_layout.setContentsMargins(4, 4, 4, 4)
-        wn_layout.setSpacing(6)
-
         self.wn_slider = QRangeSlider(float(self.wavenumbers.min()),
                                       float(self.wavenumbers.max()))
         self.wn_label = QLabel("—")
-        self.wn_label.setFixedWidth(120)  # keeps it tight
+        self.wn_label.setFixedWidth(120)
         self.wn_slider.rangeChanged.connect(self.update_plot)
-
         wn_layout.addWidget(self.wn_slider, stretch=1)
         wn_layout.addWidget(self.wn_label, stretch=0)
         wn_group.setLayout(wn_layout)
-
         main_layout.addWidget(wn_group)
 
         # --- Temperature range group ---
         t_group = QGroupBox("Temperature range (K)")
         t_layout = QHBoxLayout()
-        t_layout.setContentsMargins(4, 4, 4, 4)
-        t_layout.setSpacing(6)
-
         self.t_slider = QRangeSlider(float(self.temperatures.min()),
                                      float(self.temperatures.max()))
         self.t_label = QLabel("—")
         self.t_label.setFixedWidth(120)
         self.t_slider.rangeChanged.connect(self.update_plot)
-
         t_layout.addWidget(self.t_slider, stretch=1)
         t_layout.addWidget(self.t_label, stretch=0)
         t_group.setLayout(t_layout)
-
         main_layout.addWidget(t_group)
+
+        # --- Plot settings row ---
+        settings_group = QGroupBox("Plot Settings")
+        settings_layout = QHBoxLayout()
+
+        self.plot_type_dropdown = QComboBox()
+        self.plot_type_dropdown.addItems(
+            ["Surface", "Scatter", "Contour", "Heatmap"])
+        self.plot_type_dropdown.setCurrentText(plot_type)
+        self.plot_type_dropdown.currentTextChanged.connect(
+            self._on_plot_type_changed)
+
+        self.cmap_dropdown = QComboBox()
+        self.cmap_dropdown.addItems(
+            ["plasma", "viridis", "inferno", "cividis", "magma"])
+        self.cmap_dropdown.setCurrentText(cmap)
+        self.cmap_dropdown.currentTextChanged.connect(self._on_cmap_changed)
+
+        self.smoothing_input = QLineEdit()
+        self.smoothing_input.setPlaceholderText("Smoothing factor")
+        self.smoothing_input.setFixedWidth(110)
+        self.smoothing_input.setToolTip("Enter smoothing factor (optional)")
+        self.smoothing_input.textChanged.connect(self.update_plot)
+
+        # Pre-fill smoothing input if provided
+        if self.smoothing_factor:
+            self.smoothing_input.setText(str(self.smoothing_factor))
+
+        settings_layout.addWidget(QLabel("Type:"))
+        settings_layout.addWidget(self.plot_type_dropdown)
+        settings_layout.addSpacing(10)
+        settings_layout.addWidget(QLabel("Colormap:"))
+        settings_layout.addWidget(self.cmap_dropdown)
+        settings_layout.addSpacing(10)
+        settings_layout.addWidget(QLabel("Smoothing:"))
+        settings_layout.addWidget(self.smoothing_input)
+        settings_layout.addStretch()
+        settings_group.setLayout(settings_layout)
+        main_layout.addWidget(settings_group)
 
         self.update_plot()
 
+    def _on_plot_type_changed(self, value):
+        self.plot_type = value
+        self.update_plot()
 
-# add back the resize reload
-
+    def _on_cmap_changed(self, value):
+        self.cmap = value
+        self.update_plot()
 
     def update_plot(self, *_):
         wn_min, wn_max = self.wn_slider.lowerValue(), self.wn_slider.upperValue()
@@ -108,5 +141,20 @@ class ThreeDPlotDialog(QDialog):
         if not filtered_data:
             return
 
-        tmp_html = plot_3d(filtered_data, self.plot_type, self.cmap)
+        # Parse smoothing factor
+        smoothing_val = None
+        if self.smoothing_input.text().strip():
+            try:
+                smoothing_val = int(self.smoothing_input.text())
+                if smoothing_val <= 0:
+                    smoothing_val = None
+            except ValueError:
+                QMessageBox.warning(self, "Smoothing",
+                                    "Invalid smoothing value.")
+                return
+
+        tmp_html = plot_3d(filtered_data,
+                           self.plot_type,
+                           self.cmap,
+                           smoothing_factor=smoothing_val)
         self.view.setUrl(QUrl.fromLocalFile(os.path.abspath(tmp_html)))

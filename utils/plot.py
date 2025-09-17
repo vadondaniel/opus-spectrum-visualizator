@@ -3,7 +3,8 @@ import tempfile
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import numpy as np
-from scipy.interpolate import UnivariateSpline
+
+from utils.smoothing import gaussian_kernel_smooth, loess_1d, moving_average, smooth_combined_by_temperature, spline_safe_normalized
 
 
 def plot_spectra(ax, spectra_data, start_index=0, end_index=None, normalize=False):
@@ -125,7 +126,7 @@ def plot_temperature(
         if window_size > len(temperatures):
             raise ValueError(
                 "Window size must be less than or equal to the length of the data.")
-        temperatures = _moving_average(temperatures, window_size)
+        temperatures = moving_average(temperatures, window_size)
         # Adjust time_numeric to match the smoothed data length
         time_numeric = time_numeric[window_size - 1:]
 
@@ -141,16 +142,30 @@ def plot_temperature(
     plt.show()
 
 
-def plot_3d(combined_data, plot_type="Surface", cmap='plasma', max_points=2_000_000):
+def plot_3d(
+    combined_data,
+    plot_type="Surface",
+    cmap="plasma",
+    max_points=2_000_000,
+    smoothing_factor: int | None = None,
+):
     if not combined_data or not isinstance(combined_data, list) or not isinstance(combined_data[0], dict):
         raise ValueError("Data format invalid.")
+
+    # Apply smoothing if requested
+    if smoothing_factor is not None and smoothing_factor != 0:
+        try:
+            temp_window = float(smoothing_factor) / 10
+            combined_data = smooth_combined_by_temperature(
+                combined_data, temp_window=temp_window)
+        except Exception as e:
+            raise ValueError(f"Smoothing failed: {e}")
 
     # Convert to arrays
     wavenumbers = np.asarray(combined_data[0]["wavenumbers"])
     temperatures = np.asarray([entry["temperature"]
                               for entry in combined_data])
-    absorbances = np.asarray([entry["absorbance"]
-                              for entry in combined_data])
+    absorbances = np.asarray([entry["absorbance"] for entry in combined_data])
 
     # Downsample if too big
     M, N = absorbances.shape
@@ -168,7 +183,6 @@ def plot_3d(combined_data, plot_type="Surface", cmap='plasma', max_points=2_000_
                        y=temperatures, colorscale=cmap)
         ])
     elif plot_type == "Scatter":
-        # Flatten arrays for scatter plot
         T, W = np.meshgrid(temperatures, wavenumbers, indexing="ij")
         fig = go.Figure(data=[
             go.Scatter3d(
@@ -181,8 +195,6 @@ def plot_3d(combined_data, plot_type="Surface", cmap='plasma', max_points=2_000_
             )
         ])
     elif plot_type == "Contour":
-        # Downsample for contour to avoid lag
-        M, N = absorbances.shape
         step_m = max(1, int(np.ceil(M / np.sqrt(max_points / N))))
         step_n = max(1, int(np.ceil(N / np.sqrt(max_points / M))))
         T_ds = temperatures[::step_m]
@@ -204,7 +216,6 @@ def plot_3d(combined_data, plot_type="Surface", cmap='plasma', max_points=2_000_
             yaxis_title="Temperature (K)"
         )
     elif plot_type == "Heatmap":
-        # Much faster alternative to contour
         fig = go.Figure(data=[
             go.Heatmap(
                 z=absorbances,
@@ -234,19 +245,6 @@ def plot_3d(combined_data, plot_type="Surface", cmap='plasma', max_points=2_000_
     fig.write_html(tmp_html, include_plotlyjs='inline')
 
     return tmp_html
-
-# ---------- helper to estimate gaussian bandwidth (Silverman-like) ----------
-
-
-def estimate_bandwidth(temperatures):
-    """Estimate a 1D bandwidth (K) from temperature array using Silverman's rule of thumb."""
-    x = np.asarray(temperatures, dtype=float)
-    n = len(x)
-    if n < 2:
-        return 1.0
-    sd = np.std(x, ddof=1)
-    # Silverman: 1.06 * sd * n^(-1/5)
-    return float(1.06 * sd * n ** (-1/5))
 
 
 def plot_peak_analysis(
@@ -344,66 +342,6 @@ def plot_peak_analysis(
     ax.legend()
     fig.tight_layout()
     return temperatures, results
-
-
-def spline_safe_normalized(x, y, x_eval, strength=0.5):
-    if UnivariateSpline is None:
-        raise RuntimeError("SciPy is required for spline smoothing")
-    x = np.asarray(x, dtype=float)
-    y = np.asarray(y, dtype=float)
-    y_min, y_max = np.min(y), np.max(y)
-    y_norm = (y - y_min) / (y_max - y_min) if y_max - y_min > 0 else y - y_min
-    s_min = 1e-12
-    s_max = np.sum((y_norm - np.mean(y_norm)) ** 2)
-    s_val = s_min + strength * (s_max - s_min)
-    spline = UnivariateSpline(x, y_norm, s=s_val)
-    y_smooth_norm = spline(x_eval)
-    return y_smooth_norm * (y_max - y_min) + y_min
-
-
-def _moving_average(data, window_size):
-    """Calculate the moving average of the data."""
-    return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
-
-
-def gaussian_kernel_smooth(x, y, bandwidth, x_eval=None):
-    x = np.asarray(x, dtype=float)
-    y = np.asarray(y, dtype=float)
-    if x_eval is None:
-        x_eval = x
-    x_col = x.reshape(-1, 1)
-    x_eval_row = np.asarray(x_eval).reshape(1, -1)
-    w = np.exp(-0.5 * ((x_col - x_eval_row) / float(bandwidth))**2)
-    y_s = (w * y.reshape(-1, 1)).sum(axis=0) / \
-        np.clip(w.sum(axis=0), 1e-12, None)
-    return np.asarray(x_eval), y_s
-
-
-def loess_1d(x, y, frac=0.3, degree=1, x_eval=None):
-    x = np.asarray(x, dtype=float)
-    y = np.asarray(y, dtype=float)
-    n = len(x)
-    r = max(2, int(np.ceil(frac * n)))
-    if x_eval is None:
-        x_eval = x
-    x_eval = np.asarray(x_eval, dtype=float)
-    y_fit = np.empty_like(x_eval, dtype=float)
-    for j, x0 in enumerate(x_eval):
-        dist = np.abs(x - x0)
-        idx = np.argpartition(dist, r - 1)[:r]
-        di = dist[idx]
-        dmax = di.max()
-        if dmax == 0:
-            y_fit[j] = y[idx].mean()
-            continue
-        w = (1 - (di / dmax) ** 3) ** 3
-        X = np.vander(x[idx] - x0, N=degree + 1, increasing=True)
-        Wsqrt = np.sqrt(w)
-        Xw = X * Wsqrt[:, None]
-        yw = y[idx] * Wsqrt
-        beta, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
-        y_fit[j] = beta[0]
-    return x_eval, y_fit
 
 
 def baseline_correction(temperatures, absorbance):
