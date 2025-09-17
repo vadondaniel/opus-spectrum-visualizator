@@ -51,29 +51,32 @@ class SpectraPlotDialog(QDialog):
         idx_layout.setSpacing(6)
 
         self.idx_slider = QRangeSlider(0, len(self.spectra_data) - 1)
-        self.idx_slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.idx_label = QLabel(f"{self.idx_slider.lowerValue()} – {self.idx_slider.upperValue()}")
+        self.idx_slider.setMinimumWidth(150)
+        self.idx_slider.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        # Initialize label with actual range
+        self.idx_label = QLabel(
+            f"{self.idx_slider.lowerValue()} – {self.idx_slider.upperValue()}")
         self.idx_label.setFixedWidth(50)
         self.idx_slider.rangeChanged.connect(self._on_index_change)
 
+        # Save button
+        self.save_btn = QPushButton("Insert Displayed Range")
+        self.save_btn.setFixedWidth(150)
+        self.save_btn.clicked.connect(self._on_save)
+
+        # Target label (shows where the range will be inserted)
+        self.insert_target_label = QLabel("→ Peak Analysis")
+        self.insert_target_label.setFixedWidth(120)
+
         idx_layout.addWidget(self.idx_slider, stretch=1)
         idx_layout.addWidget(self.idx_label, stretch=0)
+        idx_layout.addWidget(self.save_btn, stretch=0)
+        idx_layout.addWidget(self.insert_target_label, stretch=0)
+
         idx_group.setLayout(idx_layout)
-
         layout.addWidget(idx_group)
-
-        # --- Button row ---
-        button_layout = QHBoxLayout()
-        self.save_btn = QPushButton("Insert Selected Range into Peak Analysis")
-        self.close_btn = QPushButton("Close")
-
-        self.save_btn.clicked.connect(self._on_save)
-        self.close_btn.clicked.connect(self.close)
-
-        button_layout.addWidget(self.save_btn)
-        button_layout.addWidget(self.close_btn)
-
-        layout.addLayout(button_layout)
 
         # Initial plot
         QTimer.singleShot(0, self._plot_spectra)
