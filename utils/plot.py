@@ -254,7 +254,7 @@ def plot_peak_analysis(
     smoothing="gaussian",
     smoothing_param=None,
     window_size=5,
-    baseline_correction_mode = "same",
+    baseline_correction_mode = "equal",
     eval_on_grid=True,
     grid_points=300,
     ax=None
@@ -349,7 +349,7 @@ def plot_peak_analysis(
     return temperatures, results
 
 
-def baseline_correction(temperatures, absorbance, mode="same"):
+def baseline_correction(temperatures, absorbance, mode="equal"):
     """
     Linear baseline correction.
 
@@ -359,13 +359,13 @@ def baseline_correction(temperatures, absorbance, mode="same"):
       - "zero": set first and last to zero
     """
     absorbance = absorbance.copy()
-    if mode == "original":
+    if mode == "none":
         return absorbance
 
     x0, x1 = temperatures[0], temperatures[-1]
     y0, y1 = absorbance[0], absorbance[-1]
 
-    if mode == "same":
+    if mode == "equal":
         baseline = y0 + (y1 - y0) * (temperatures - x0) / (x1 - x0)
         return absorbance - (baseline - y0)
     elif mode == "zero":
