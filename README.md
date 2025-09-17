@@ -111,6 +111,7 @@ The installer will appear in the `/Output/` folder as `OpusSpectrumVisualizatorI
 
   <img src="images/surface_plot.png" alt="3D Surface Plot" width="600">  
   <img src="images/scatter_plot.png" alt="3D Scatter Plot" width="600">
+  <img src="images/contour_plot.png" alt="3D Scatter Plot" width="600">
 
 ### Peak Analysis
 
