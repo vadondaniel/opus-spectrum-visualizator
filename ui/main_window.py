@@ -703,7 +703,8 @@ class MainWindow(QMainWindow):
             wavelength_ranges=ranges,
             display_type=display_type,
             smoothing=smoothing_method,
-            smoothing_param=smoothing_param
+            smoothing_param=smoothing_param,
+            parent=self
         )
         self.peak_dialog.show()
 

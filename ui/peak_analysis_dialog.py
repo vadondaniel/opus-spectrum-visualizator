@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QGroupBox, QHBoxLayout,
-    QLabel, QComboBox, QDoubleSpinBox
+    QLabel, QComboBox, QDoubleSpinBox, QSizePolicy
 )
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import Qt, QTimer
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -16,6 +16,12 @@ class PeakAnalysisDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Peak Analysis")
         self.resize(900, 600)
+        
+        self.setWindowFlags(
+            Qt.WindowType.Window |
+            Qt.WindowType.WindowMinMaxButtonsHint |
+            Qt.WindowType.WindowCloseButtonHint
+        )
 
         self.combined_list = combined_list
         self.wavelength_ranges = wavelength_ranges
@@ -24,7 +30,7 @@ class PeakAnalysisDialog(QDialog):
         self.display_type = display_type
         self.smoothing_method = smoothing
         self.smoothing_param = smoothing_param
-        self.baseline_method = "original"
+        self.baseline_method = "none"
 
         # --- Matplotlib figure ---
         self.fig, self.ax = plt.subplots(figsize=(10, 6))
@@ -68,7 +74,7 @@ class PeakAnalysisDialog(QDialog):
         
         # Baseline method dropdown
         self.baseline_method_dropdown = QComboBox()
-        self.baseline_method_dropdown.addItems(["original", "same", "zero"])
+        self.baseline_method_dropdown.addItems(["none", "equal", "zero"])
         self.baseline_method_dropdown.setCurrentText(self.baseline_method)
         self.baseline_method_dropdown.setToolTip("Select the method of baseline correction")
         self.baseline_method_dropdown.setFixedWidth(110)
@@ -85,11 +91,12 @@ class PeakAnalysisDialog(QDialog):
         settings_layout.addWidget(self.smoothing_param_spin)
         self._update_smoothing_param_ui(self.smoothing_method)
         settings_layout.addSpacing(10)
-        settings_layout.addWidget(QLabel("Baseline Method:"))
+        settings_layout.addWidget(QLabel("Baseline Correction:"))
         settings_layout.addWidget(self.baseline_method_dropdown)
         settings_layout.addStretch()
 
         settings_group.setLayout(settings_layout)
+        settings_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         main_layout.addWidget(settings_group)
 
         self.setLayout(main_layout)
