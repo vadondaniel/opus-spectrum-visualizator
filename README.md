@@ -29,6 +29,43 @@ Start the program from the **Desktop Icon**, **Start Menu** or search for *Opus 
 
 ---
 
+## 📚 Usage Guide
+
+1. Select the folder containing OPUS files.
+2. Select the `.txt` file containing temperature data.
+3. Start the processing.
+4. (Optional) Set absorbance range filter to filter out extremes or undesired intervals.
+5. Inspect or export processed spectra.
+6. For 3D visualization: set desired options, then click **Plot 3D**.
+7. For peak analysis: adjust parameters, then either
+
+   - click **Export as CSV** to save results, or
+   - click **Peak Analysis** to visualize directly.
+
+---
+
+## 🖼 Screenshots
+
+### Main Interface
+
+  <img src="images/main_ui.png" alt="Main UI" width="600">
+
+### Spectral Data Visualization
+
+  <img src="images/spectra_plot.png" alt="3D Surface Plot" width="600">  
+
+### 3D Visualization
+
+  <img src="images/surface_plot.png" alt="3D Surface Plot" width="600">  
+  <img src="images/scatter_plot.png" alt="3D Scatter Plot" width="600">
+  <img src="images/contour_plot.png" alt="3D Scatter Plot" width="600">
+
+### Peak Analysis
+
+  <img src="images/peak_analysis.png" alt="Peak Analysis" width="600">
+
+---
+
 ## ⚙️ Installation (Developer / Source Build)
 
 If you want to run or modify the program from source, follow these steps:
@@ -81,41 +118,6 @@ The executable will appear in the `/dist/` folder as `main.exe`
 The installer will appear in the `/Output/` folder as `OpusSpectrumVisualizatorInstaller.exe`
 
 > Using a version installed with the installer starts considerably faster than a standalone executable file from step 4 above.
-
----
-
-## 📚 Usage Guide
-
-1. Select the folder containing OPUS files.
-2. Select the `.txt` file containing temperature data.
-3. Start the processing.
-4. For 3D visualization: set desired options, then click **Plot 3D**.
-5. For peak analysis: adjust parameters, then either
-
-   - click **Export as CSV** to save results, or
-   - click **Peak Analysis** to visualize directly.
-
----
-
-## 🖼 Screenshots
-
-### Main Interface
-
-  <img src="images/main_ui.png" alt="Main UI" width="600">
-
-### Spectral Data Visualization
-
-  <img src="images/spectra_plot.png" alt="3D Surface Plot" width="600">  
-
-### 3D Visualization
-
-  <img src="images/surface_plot.png" alt="3D Surface Plot" width="600">  
-  <img src="images/scatter_plot.png" alt="3D Scatter Plot" width="600">
-  <img src="images/contour_plot.png" alt="3D Scatter Plot" width="600">
-
-### Peak Analysis
-
-  <img src="images/peak_analysis.png" alt="Peak Analysis" width="600">
 
 ---
 
