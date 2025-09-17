@@ -2,6 +2,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QGroupBox, QHBoxLayout,
     QLabel, QComboBox, QDoubleSpinBox
 )
+from PyQt6.QtCore import QTimer
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -56,6 +57,7 @@ class PeakAnalysisDialog(QDialog):
         self.smoothing_method_dropdown.currentTextChanged.connect(self._update_smoothing_param_ui)
 
         # Smoothing parameter spinbox
+        self.smoothing_param_label = QLabel()
         self.smoothing_param_spin = QDoubleSpinBox()
         self.smoothing_param_spin.setDecimals(3)
         self.smoothing_param_spin.setRange(0.0, 1e6)
@@ -79,8 +81,9 @@ class PeakAnalysisDialog(QDialog):
         settings_layout.addWidget(QLabel("Smoothing Method:"))
         settings_layout.addWidget(self.smoothing_method_dropdown)
         settings_layout.addSpacing(10)
-        settings_layout.addWidget(QLabel("Param:"))
+        settings_layout.addWidget(self.smoothing_param_label)
         settings_layout.addWidget(self.smoothing_param_spin)
+        self._update_smoothing_param_ui(self.smoothing_method)
         settings_layout.addSpacing(10)
         settings_layout.addWidget(QLabel("Baseline Method:"))
         settings_layout.addWidget(self.baseline_method_dropdown)
@@ -92,7 +95,7 @@ class PeakAnalysisDialog(QDialog):
         self.setLayout(main_layout)
 
         # --- Initial plot ---
-        self._plot()
+        QTimer.singleShot(0, self._plot)
 
     def _on_display_changed(self, text):
         self.display_type = text.lower()
@@ -104,21 +107,25 @@ class PeakAnalysisDialog(QDialog):
         self.smoothing_method = method
 
         if method == "gaussian":
+            self.smoothing_param_label.setText("Bandwidth (K):")
             self.smoothing_param_spin.setRange(0.01, 1e5)
             self.smoothing_param_spin.setValue(5.0)
             self.smoothing_param_spin.setSingleStep(0.1)
             self.smoothing_param_spin.setToolTip("Set the level of smoothing (bandwidth in K)")
         elif method == "loess":
+            self.smoothing_param_label.setText("Frac (0–1):")
             self.smoothing_param_spin.setRange(0.01, 1.0)
             self.smoothing_param_spin.setValue(0.25)
             self.smoothing_param_spin.setSingleStep(0.01)
             self.smoothing_param_spin.setToolTip("Set the level of smoothing (fraction of points)")
         elif method == "spline":
+            self.smoothing_param_label.setText("Strength (0–1):")
             self.smoothing_param_spin.setRange(0.0, 1.0)
             self.smoothing_param_spin.setValue(0.2)
             self.smoothing_param_spin.setSingleStep(0.01)
             self.smoothing_param_spin.setToolTip("Set the level of smoothing (strength 0-1)")
         elif method == "boxcar":
+            self.smoothing_param_label.setText("Window (K):")
             self.smoothing_param_spin.setRange(0.01, 1e5)
             self.smoothing_param_spin.setValue(5.0)
             self.smoothing_param_spin.setSingleStep(0.5)
