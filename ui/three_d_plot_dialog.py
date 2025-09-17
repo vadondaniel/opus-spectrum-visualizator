@@ -35,6 +35,14 @@ class ThreeDPlotDialog(QDialog):
         self.view = QWebEngineView()
         self.view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         main_layout.addWidget(self.view, stretch=1)
+        
+        # Force repaint after load to avoid blank view
+        def on_load_finished(ok):
+            if ok:
+                self.view.resize(self.view.width() + 1, self.view.height() + 1)
+                self.view.resize(self.view.width() - 1, self.view.height() - 1)
+
+        self.view.loadFinished.connect(on_load_finished)
 
         # --- Wavenumber range group ---
         wn_group = QGroupBox("Wavenumber range (cm⁻¹)")
@@ -73,6 +81,10 @@ class ThreeDPlotDialog(QDialog):
         main_layout.addWidget(t_group)
 
         self.update_plot()
+
+
+# add back the resize reload
+
 
     def update_plot(self, *_):
         wn_min, wn_max = self.wn_slider.lowerValue(), self.wn_slider.upperValue()
