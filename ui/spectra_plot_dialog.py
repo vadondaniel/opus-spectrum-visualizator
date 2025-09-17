@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QPushButton, QHBoxLayout, QGroupBox, QLabel, QSizePolicy
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
@@ -52,7 +52,7 @@ class SpectraPlotDialog(QDialog):
 
         self.idx_slider = QRangeSlider(0, len(self.spectra_data) - 1)
         self.idx_slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.idx_label = QLabel("All")
+        self.idx_label = QLabel(f"{self.idx_slider.lowerValue()} – {self.idx_slider.upperValue()}")
         self.idx_label.setFixedWidth(50)
         self.idx_slider.rangeChanged.connect(self._on_index_change)
 
@@ -76,7 +76,7 @@ class SpectraPlotDialog(QDialog):
         layout.addLayout(button_layout)
 
         # Initial plot
-        self._plot_spectra()
+        QTimer.singleShot(0, self._plot_spectra)
 
     def _on_index_change(self, *_):
         self.start_index = int(self.idx_slider.lowerValue())
