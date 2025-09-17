@@ -320,12 +320,16 @@ def plot_peak_analysis(
                 smoothed = spline_safe_normalized(
                     temperatures, summed_absorbance, x_eval, float(param))
 
+        label = f"{start_w}-{end_w}"
+
         # --- plotting ---
         if display_type in ("raw", "both"):
             ax.plot(temperatures, summed_absorbance, marker=marker,
-                    linestyle='-', color=color, label=f"{start_w}-{end_w}")
+                    linestyle='-', color=color, label=label)
         if smoothed is not None:
-            ax.plot(x_eval, smoothed, linestyle='--', linewidth=2, color=color)
+            smoothed_label = label if display_type == "smoothed" else None
+            ax.plot(x_eval, smoothed, linestyle='--', linewidth=2,
+                    color=color, label=smoothed_label)
 
     ax.set_xlabel("Temperature (K)")
     ax.set_ylabel("Integrated Absorbance")
