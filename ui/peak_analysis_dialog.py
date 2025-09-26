@@ -30,7 +30,7 @@ class PeakAnalysisDialog(QDialog):
         self.display_type = display_type
         self.smoothing_method = smoothing
         self.smoothing_param = smoothing_param
-        self.baseline_method = "none"
+        self.baseline_method = "trapezoid"
 
         # --- Matplotlib figure ---
         self.fig, self.ax = plt.subplots(figsize=(10, 6))
@@ -74,7 +74,7 @@ class PeakAnalysisDialog(QDialog):
         
         # Baseline method dropdown
         self.baseline_method_dropdown = QComboBox()
-        self.baseline_method_dropdown.addItems(["none", "equal", "zero"])
+        self.baseline_method_dropdown.addItems(["trapezoid", "none"])
         self.baseline_method_dropdown.setCurrentText(self.baseline_method)
         self.baseline_method_dropdown.setToolTip("Select the method of baseline correction")
         self.baseline_method_dropdown.setFixedWidth(110)

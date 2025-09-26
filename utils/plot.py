@@ -254,7 +254,7 @@ def plot_peak_analysis(
     smoothing="gaussian",
     smoothing_param=None,
     window_size=5,
-    baseline_correction_mode = "equal",
+    baseline_correction_mode="none",
     eval_on_grid=True,
     grid_points=300,
     ax=None
@@ -349,27 +349,41 @@ def plot_peak_analysis(
     return temperatures, results
 
 
-def baseline_correction(temperatures, absorbance, mode="equal"):
+def baseline_correction(temperatures, absorbance, mode="none"):
     """
-    Linear baseline correction.
+    Baseline correction for absorbance data.
 
-    mode:
-      - "original": no correction
-      - "same": adjust last point to equal first
-      - "zero": set first and last to zero
+    Parameters
+    ----------
+    temperatures : array-like
+        X values (e.g. temperatures, can be unevenly spaced).
+    absorbance : array-like
+        Y values (absorbance).
+    mode : {"none", "trapezoid"}, default "none"
+        - "none": no correction
+        - "trapezoid": add +1 to absorbance, subtract trapezoid baseline
+                       (line between endpoints relative to x-axis)
     """
-    absorbance = absorbance.copy()
+    temps = np.asarray(temperatures, dtype=float)
+    absb = np.asarray(absorbance, dtype=float).copy()
+
     if mode == "none":
-        return absorbance
+        return absb
 
-    x0, x1 = temperatures[0], temperatures[-1]
-    y0, y1 = absorbance[0], absorbance[-1]
+    if mode == "trapezoid":
+        # step 1: shift absorbance by +1
+        shifted = absb + 1.0
 
-    if mode == "equal":
-        baseline = y0 + (y1 - y0) * (temperatures - x0) / (x1 - x0)
-        return absorbance - (baseline - y0)
-    elif mode == "zero":
-        baseline = y0 + (y1 - y0) * (temperatures - x0) / (x1 - x0)
-        return absorbance - baseline
-    else:
-        raise ValueError(f"Unknown baseline correction mode: {mode}")
+        # step 2: baseline is straight line from (x0,y0) to (x1,y1)
+        x0, x1 = temps[0], temps[-1]
+        y0, y1 = shifted[0], shifted[-1]
+
+        slope = (y1 - y0) / (x1 - x0)
+        baseline = y0 + slope * (temps - x0)
+
+        # step 3: subtract baseline from shifted absorbance
+        corrected = shifted - baseline
+
+        return corrected
+
+    raise ValueError(f"Unknown baseline correction mode: {mode!r}")
