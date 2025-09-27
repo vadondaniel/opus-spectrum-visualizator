@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QPushButton, QHBoxLayout, QGroupBox, QLabel, QSizePolicy
+    QDialog, QVBoxLayout, QPushButton, QHBoxLayout, QGroupBox,
+    QLabel, QSizePolicy, QLineEdit
 )
 from PyQt6.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -39,7 +40,6 @@ class SpectraPlotDialog(QDialog):
         # Optional toolbar (zoom/pan/reset)
         self.toolbar = NavigationToolbar(self.canvas, self)
 
-        # Layout
         layout = QVBoxLayout(self)
         layout.addWidget(self.toolbar)
         layout.addWidget(self.canvas, stretch=1)
@@ -55,28 +55,55 @@ class SpectraPlotDialog(QDialog):
         self.idx_slider.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-        # Initialize label with actual range
-        self.idx_label = QLabel(
-            f"{self.idx_slider.lowerValue()} – {self.idx_slider.upperValue()}")
-        self.idx_label.setFixedWidth(50)
-        self.idx_slider.rangeChanged.connect(self._on_index_change)
+        # Input fields for start/end
+        self.idx_min_input = QLineEdit()
+        self.idx_max_input = QLineEdit()
+        for inp in (self.idx_min_input, self.idx_max_input):
+            inp.setFixedWidth(60)
+            inp.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        # Sync slider → inputs
+        def update_idx_inputs():
+            self.idx_min_input.setText(str(int(self.idx_slider.lowerValue())))
+            self.idx_max_input.setText(str(int(self.idx_slider.upperValue())))
+
+        # Sync inputs → slider
+        def update_idx_slider():
+            try:
+                min_val = int(self.idx_min_input.text())
+                max_val = int(self.idx_max_input.text())
+                if 0 <= min_val <= max_val < len(self.spectra_data):
+                    self.idx_slider.setLowerValue(min_val)
+                    self.idx_slider.setUpperValue(max_val)
+                    self._on_index_change()
+            except ValueError:
+                pass
+
+        self.idx_slider.rangeChanged.connect(
+            lambda *_: (update_idx_inputs(), self._on_index_change()))
+        self.idx_min_input.editingFinished.connect(update_idx_slider)
+        self.idx_max_input.editingFinished.connect(update_idx_slider)
 
         # Save button
         self.save_btn = QPushButton("Insert Displayed Range")
         self.save_btn.setFixedWidth(150)
         self.save_btn.clicked.connect(self._on_save)
 
-        # Target label (shows where the range will be inserted)
         self.insert_target_label = QLabel("→ Peak Analysis")
         self.insert_target_label.setFixedWidth(120)
 
         idx_layout.addWidget(self.idx_slider, stretch=1)
-        idx_layout.addWidget(self.idx_label, stretch=0)
+        idx_layout.addWidget(self.idx_min_input)
+        idx_layout.addWidget(QLabel("–"))
+        idx_layout.addWidget(self.idx_max_input)
         idx_layout.addWidget(self.save_btn, stretch=0)
         idx_layout.addWidget(self.insert_target_label, stretch=0)
 
         idx_group.setLayout(idx_layout)
         layout.addWidget(idx_group)
+
+        # Init inputs
+        update_idx_inputs()
 
         # Initial plot
         QTimer.singleShot(0, self._plot_spectra)
@@ -84,7 +111,6 @@ class SpectraPlotDialog(QDialog):
     def _on_index_change(self, *_):
         self.start_index = int(self.idx_slider.lowerValue())
         self.end_index = int(self.idx_slider.upperValue())
-        self.idx_label.setText(f"{self.start_index} – {self.end_index}")
         self._plot_spectra()
 
     def _plot_spectra(self):
