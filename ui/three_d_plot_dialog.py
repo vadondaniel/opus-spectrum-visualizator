@@ -47,28 +47,84 @@ class ThreeDPlotDialog(QDialog):
         # --- Wavenumber range group ---
         wn_group = QGroupBox("Wavenumber range (cm⁻¹)")
         wn_layout = QHBoxLayout()
+
         self.wn_slider = QRangeSlider(float(self.wavenumbers.min()),
                                       float(self.wavenumbers.max()))
-        self.wn_label = QLabel("—")
-        self.wn_label.setFixedWidth(120)
-        self.wn_slider.rangeChanged.connect(self.update_plot)
+
+        self.wn_min_input = QLineEdit()
+        self.wn_max_input = QLineEdit()
+        for inp in (self.wn_min_input, self.wn_max_input):
+            inp.setFixedWidth(70)
+            inp.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        def update_wn_inputs():
+            self.wn_min_input.setText(f"{self.wn_slider.lowerValue():.1f}")
+            self.wn_max_input.setText(f"{self.wn_slider.upperValue():.1f}")
+
+        def update_wn_slider():
+            try:
+                min_val = float(self.wn_min_input.text())
+                max_val = float(self.wn_max_input.text())
+                if min_val <= max_val:
+                    self.wn_slider.setLowerValue(min_val)
+                    self.wn_slider.setUpperValue(max_val)
+                    self.update_plot()
+            except ValueError:
+                pass
+
+        self.wn_slider.rangeChanged.connect(
+            lambda *_: (update_wn_inputs(), self.update_plot()))
+        self.wn_min_input.editingFinished.connect(update_wn_slider)
+        self.wn_max_input.editingFinished.connect(update_wn_slider)
+
         wn_layout.addWidget(self.wn_slider, stretch=1)
-        wn_layout.addWidget(self.wn_label, stretch=0)
+        wn_layout.addWidget(self.wn_min_input)
+        wn_layout.addWidget(QLabel("–"))
+        wn_layout.addWidget(self.wn_max_input)
         wn_group.setLayout(wn_layout)
         main_layout.addWidget(wn_group)
+        update_wn_inputs()
 
         # --- Temperature range group ---
         t_group = QGroupBox("Temperature range (K)")
         t_layout = QHBoxLayout()
+
         self.t_slider = QRangeSlider(float(self.temperatures.min()),
                                      float(self.temperatures.max()))
-        self.t_label = QLabel("—")
-        self.t_label.setFixedWidth(120)
-        self.t_slider.rangeChanged.connect(self.update_plot)
+
+        self.t_min_input = QLineEdit()
+        self.t_max_input = QLineEdit()
+        for inp in (self.t_min_input, self.t_max_input):
+            inp.setFixedWidth(70)
+            inp.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        def update_t_inputs():
+            self.t_min_input.setText(f"{self.t_slider.lowerValue():.1f}")
+            self.t_max_input.setText(f"{self.t_slider.upperValue():.1f}")
+
+        def update_t_slider():
+            try:
+                min_val = float(self.t_min_input.text())
+                max_val = float(self.t_max_input.text())
+                if min_val <= max_val:
+                    self.t_slider.setLowerValue(min_val)
+                    self.t_slider.setUpperValue(max_val)
+                    self.update_plot()
+            except ValueError:
+                pass
+
+        self.t_slider.rangeChanged.connect(
+            lambda *_: (update_t_inputs(), self.update_plot()))
+        self.t_min_input.editingFinished.connect(update_t_slider)
+        self.t_max_input.editingFinished.connect(update_t_slider)
+
         t_layout.addWidget(self.t_slider, stretch=1)
-        t_layout.addWidget(self.t_label, stretch=0)
+        t_layout.addWidget(self.t_min_input)
+        t_layout.addWidget(QLabel("–"))
+        t_layout.addWidget(self.t_max_input)
         t_group.setLayout(t_layout)
         main_layout.addWidget(t_group)
+        update_t_inputs()
 
         # --- Plot settings row ---
         settings_group = QGroupBox("Plot Settings")
@@ -122,9 +178,6 @@ class ThreeDPlotDialog(QDialog):
     def update_plot(self, *_):
         wn_min, wn_max = self.wn_slider.lowerValue(), self.wn_slider.upperValue()
         t_min, t_max = self.t_slider.lowerValue(), self.t_slider.upperValue()
-
-        self.wn_label.setText(f"{wn_min:.1f} – {wn_max:.1f} cm⁻¹")
-        self.t_label.setText(f"{t_min:.1f} – {t_max:.1f} K")
 
         wn = self.wavenumbers
         wn_mask = (wn >= wn_min) & (wn <= wn_max)
