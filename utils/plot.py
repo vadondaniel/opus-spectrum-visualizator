@@ -287,14 +287,22 @@ def plot_peak_analysis(
         color = base_colors[i % len(base_colors)]
         marker = base_markers[i % len(base_markers)]
 
-        summed_absorbance = np.array([
-            np.sum(e["absorbance"][(e["wavenumbers"] >= start_w)
-                   & (e["wavenumbers"] <= end_w)])
-            for e in combined_list
-        ], dtype=float)[sort_idx]
+        # Apply baseline correction to each spectrum slice before summing
+        summed_list = []
+        for e in combined_list:
+            mask = (np.asarray(e["wavenumbers"]) >= start_w) & (np.asarray(e["wavenumbers"]) <= end_w)
+            wn_slice = np.asarray(e["wavenumbers"])[mask]
+            abs_slice = np.asarray(e["absorbance"])[mask].astype(float)
 
-        summed_absorbance = baseline_correction(
-            temperatures, summed_absorbance, baseline_correction_mode)
+            # If baseline correction mode requires at least two points, skip if not available
+            if baseline_correction_mode != "none" and len(wn_slice) >= 2 and (wn_slice[0] != wn_slice[-1]):
+                abs_corr = baseline_correction(wn_slice, abs_slice, baseline_correction_mode)
+            else:
+                abs_corr = abs_slice
+
+            summed_list.append(np.sum(abs_corr))
+
+        summed_absorbance = np.array(summed_list, dtype=float)[sort_idx]
         results[(start_w, end_w)] = summed_absorbance
 
         # --- smoothing ---
@@ -349,7 +357,7 @@ def plot_peak_analysis(
     return temperatures, results
 
 
-def baseline_correction(temperatures, absorbance, mode="none"):
+def baseline_correction(wavenumbers, absorbance, mode="none"):
     """
     Baseline correction for absorbance data.
 
@@ -364,7 +372,7 @@ def baseline_correction(temperatures, absorbance, mode="none"):
         - "trapezoid": add +1 to absorbance, subtract trapezoid baseline
                        (line between endpoints relative to x-axis)
     """
-    temps = np.asarray(temperatures, dtype=float)
+    wavns = np.asarray(wavenumbers, dtype=float)
     absb = np.asarray(absorbance, dtype=float).copy()
 
     if mode == "none":
@@ -375,11 +383,11 @@ def baseline_correction(temperatures, absorbance, mode="none"):
         shifted = absb + 1.0
 
         # step 2: baseline is straight line from (x0,y0) to (x1,y1)
-        x0, x1 = temps[0], temps[-1]
+        x0, x1 = wavns[0], wavns[-1]
         y0, y1 = shifted[0], shifted[-1]
 
         slope = (y1 - y0) / (x1 - x0)
-        baseline = y0 + slope * (temps - x0)
+        baseline = y0 + slope * (wavns - x0)
 
         # step 3: subtract baseline from shifted absorbance
         corrected = shifted - baseline
