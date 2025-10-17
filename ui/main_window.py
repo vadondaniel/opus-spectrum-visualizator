@@ -399,6 +399,7 @@ class MainWindow(QMainWindow):
             <b>Developed by:</b> Dániel Vadon & Dr. Bálint Rubovszky</p>
             <p><b>Version:</b> 1.4.3 <a href="https://github.com/vadondaniel/opus-spectrum-visualizator">GitHub</a></p>
         """)
+        # TODO: latest version check
 
     # === Slots ===
     def select_spectrum_folder(self):

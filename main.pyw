@@ -14,7 +14,7 @@ if not getattr(sys, 'frozen', False):
         "scipy": "scipy",
         "PyInstaller": "pyinstaller",
     }
-
+    # TODO: specify versions
     for import_name, pip_name in required_packages.items():
         try:
             importlib.import_module(import_name)
