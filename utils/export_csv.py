@@ -142,13 +142,19 @@ def export_peak_analysis_csv(
     if not filename:  # user cancelled
         return None
 
-    # Sort by temperature
-    temperatures = np.array([e["temperature"]
-                            for e in combined_list], dtype=float)
+    # Extract arrays
+    timestamps = np.array([e.get("timestamp", np.nan) for e in combined_list])
+    temperatures = np.array([e["temperature"] for e in combined_list], dtype=float)
     sort_idx = np.argsort(temperatures)
     temperatures = temperatures[sort_idx]
+    timestamps = timestamps[sort_idx]
+    
+    timestamps = timestamps.astype(np.int64)
 
-    data = {"Temperature (K)": temperatures}  # np.round(temperatures, 4)
+    data = {
+        "Timestamp": timestamps,
+        "Temperature (K)": temperatures  # np.round(temperatures, 4)
+    }
 
     for (start_wavelength, end_wavelength) in wavelength_ranges:
         summed_absorbance = np.array([
