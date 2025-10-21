@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QGroupBox, QHBoxLayout,
-    QSizePolicy, QComboBox, QLineEdit, QMessageBox
+    QSizePolicy, QComboBox, QLineEdit, QMessageBox, QCheckBox
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtCore import Qt, QUrl
@@ -11,7 +11,12 @@ from utils.plot import plot_3d
 
 
 class ThreeDPlotDialog(QDialog):
-    def __init__(self, combined_data, plot_type, cmap, smoothing_factor=None, parent=None):
+    def __init__(self, combined_data, plot_type, cmap,
+                 smoothing_factor=None,
+                 baseline_enabled=False,
+                 baseline_min=None,
+                 baseline_max=None,
+                 parent=None):
         super().__init__(parent)
 
         self.setWindowTitle(plot_type + " Plot")
@@ -25,6 +30,11 @@ class ThreeDPlotDialog(QDialog):
         self.plot_type = plot_type
         self.cmap = cmap
         self.smoothing_factor = smoothing_factor
+
+        # Baseline correction state
+        self.baseline_enabled = bool(baseline_enabled)
+        self.baseline_min = baseline_min
+        self.baseline_max = baseline_max
 
         self.wavenumbers = np.array(combined_data[0]["wavenumbers"])
         self.temperatures = np.array([e["temperature"] for e in combined_data])
@@ -153,6 +163,41 @@ class ThreeDPlotDialog(QDialog):
         if self.smoothing_factor:
             self.smoothing_input.setText(str(self.smoothing_factor))
 
+        # Baseline correction controls (inline with plot settings)
+        self.baseline_checkbox = QCheckBox("Enable")
+        self.baseline_checkbox.setChecked(self.baseline_enabled)
+        self.baseline_checkbox.toggled.connect(self.update_plot)
+
+        self.bl_min_input = QLineEdit()
+        self.bl_min_input.setPlaceholderText("Min wn")
+        self.bl_min_input.setFixedWidth(90)
+        self.bl_min_input.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.bl_max_input = QLineEdit()
+        self.bl_max_input.setPlaceholderText("Max wn")
+        self.bl_max_input.setFixedWidth(90)
+        self.bl_max_input.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        # Prefill with passed values or defaults from global wn range
+        if self.baseline_min is None:
+            self.baseline_min = float(self.wavenumbers.min())
+        if self.baseline_max is None:
+            self.baseline_max = float(self.wavenumbers.max())
+
+        try:
+            self.bl_min_input.setText(f"{float(self.baseline_min):.1f}")
+        except Exception:
+            self.bl_min_input.setText("")
+        try:
+            self.bl_max_input.setText(f"{float(self.baseline_max):.1f}")
+        except Exception:
+            self.bl_max_input.setText("")
+
+        def _on_bl_inputs_changed():
+            self.update_plot()
+
+        self.bl_min_input.editingFinished.connect(_on_bl_inputs_changed)
+        self.bl_max_input.editingFinished.connect(_on_bl_inputs_changed)
+
         settings_layout.addWidget(QLabel("Type:"))
         settings_layout.addWidget(self.plot_type_dropdown)
         settings_layout.addSpacing(10)
@@ -161,6 +206,12 @@ class ThreeDPlotDialog(QDialog):
         settings_layout.addSpacing(10)
         settings_layout.addWidget(QLabel("Smoothing:"))
         settings_layout.addWidget(self.smoothing_input)
+        settings_layout.addSpacing(10)
+        settings_layout.addWidget(QLabel("Baseline:"))
+        settings_layout.addWidget(self.baseline_checkbox)
+        settings_layout.addWidget(self.bl_min_input)
+        settings_layout.addWidget(QLabel("–"))
+        settings_layout.addWidget(self.bl_max_input)
         settings_layout.addStretch()
         settings_group.setLayout(settings_layout)
         main_layout.addWidget(settings_group)
@@ -182,8 +233,30 @@ class ThreeDPlotDialog(QDialog):
         wn = self.wavenumbers
         wn_mask = (wn >= wn_min) & (wn <= wn_max)
 
+        # Determine whether to apply baseline correction and get min/max
+        apply_baseline = self.baseline_checkbox.isChecked()
+        bl_min_val = None
+        bl_max_val = None
+        if apply_baseline:
+            try:
+                bl_min_val = float(self.bl_min_input.text())
+                bl_max_val = float(self.bl_max_input.text())
+                if not (np.isfinite(bl_min_val) and np.isfinite(bl_max_val)):
+                    apply_baseline = False
+                elif bl_min_val == bl_max_val:
+                    QMessageBox.warning(self, "Baseline",
+                                        "Baseline min and max must differ.")
+                    apply_baseline = False
+            except Exception:
+                apply_baseline = False
+
+        # Prepare data (optionally baseline-corrected) then filter by ranges
+        source_data = self.combined_data
+        if apply_baseline:
+            source_data = self._baseline_correct_dataset(self.combined_data, bl_min_val, bl_max_val)
+
         filtered_data = []
-        for entry in self.combined_data:
+        for entry in source_data:
             if t_min <= entry["temperature"] <= t_max:
                 filtered_data.append({
                     "temperature": entry["temperature"],
@@ -211,3 +284,50 @@ class ThreeDPlotDialog(QDialog):
                            self.cmap,
                            smoothing_factor=smoothing_val)
         self.view.setUrl(QUrl.fromLocalFile(os.path.abspath(tmp_html)))
+
+    # --- helpers ---
+    def _baseline_correct_dataset(self, combined_data, wn_min, wn_max):
+        """Return a new combined_data list where each spectrum is corrected by a linear baseline
+        defined by absorbance values at wn_min and wn_max for that spectrum, subtracting the
+        baseline from all absorbance points.
+        """
+        if wn_min == wn_max:
+            return combined_data
+
+        corrected = []
+        for entry in combined_data:
+            wn = np.asarray(entry["wavenumbers"], dtype=float)
+            ab = np.asarray(entry["absorbance"], dtype=float)
+
+            # Interpolate absorbance at the two anchor wavenumbers
+            y1 = self._interp_at(wn, ab, wn_min)
+            y2 = self._interp_at(wn, ab, wn_max)
+
+            # Compute baseline line and subtract
+            slope = (y2 - y1) / (wn_max - wn_min)
+            baseline = y1 + slope * (wn - wn_min)
+            ab_corr = ab - baseline
+
+            corrected.append({
+                "temperature": entry["temperature"],
+                "wavenumbers": wn,
+                "absorbance": ab_corr,
+            })
+
+        return corrected
+
+    @staticmethod
+    def _interp_at(x, y, x0):
+        """Interpolate y(x) at x0 for monotonic x that may be ascending or descending.
+        If x0 is out of bounds, returns the nearest endpoint value (np.interp behavior).
+        """
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        if x.size == 0:
+            return float('nan')
+        if x.size == 1:
+            return float(y[0])
+        if x[0] <= x[-1]:
+            return float(np.interp(x0, x, y))
+        # descending axis: reverse for interpolation
+        return float(np.interp(x0, x[::-1], y[::-1]))

@@ -5,7 +5,7 @@ import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QFileDialog, QProgressBar, QLineEdit, QMessageBox,
-    QComboBox, QGroupBox, QDoubleSpinBox, QGridLayout, QSpacerItem, QSizePolicy
+    QComboBox, QGroupBox, QDoubleSpinBox, QGridLayout, QSpacerItem, QSizePolicy, QCheckBox
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
@@ -243,9 +243,10 @@ class MainWindow(QMainWindow):
     # ------------------------
     def _create_visualization_group(self):
         group = QGroupBox("3D Plotting")
-        layout = QHBoxLayout()
-        layout.setSpacing(10)
-        layout.setContentsMargins(10, 6, 10, 6)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+        grid.setContentsMargins(10, 6, 10, 6)
 
         # Plot type
         self.plot_type_dropdown = QComboBox()
@@ -267,6 +268,25 @@ class MainWindow(QMainWindow):
         self.smoothing_input.setFixedWidth(110)
         self.smoothing_input.setToolTip("Enter smoothing factor (optional)")
 
+        # Baseline correction (3D) toggle and inputs
+        self.baseline_3d_checkbox = QCheckBox("Baseline (3D)")
+        self.baseline_3d_checkbox.setToolTip(
+            "Enable linear baseline subtraction between two wavenumbers for 3D plot")
+        self.baseline_3d_min_input = QLineEdit()
+        self.baseline_3d_min_input.setPlaceholderText("Min wn")
+        self.baseline_3d_min_input.setFixedWidth(80)
+        self.baseline_3d_min_input.setEnabled(False)
+        self.baseline_3d_max_input = QLineEdit()
+        self.baseline_3d_max_input.setPlaceholderText("Max wn")
+        self.baseline_3d_max_input.setFixedWidth(80)
+        self.baseline_3d_max_input.setEnabled(False)
+
+        def _toggle_bl_inputs(checked):
+            self.baseline_3d_min_input.setEnabled(checked)
+            self.baseline_3d_max_input.setEnabled(checked)
+
+        self.baseline_3d_checkbox.toggled.connect(_toggle_bl_inputs)
+
         # Buttons
         self.combined_export_btn = QPushButton("Export as CSV")
         self.combined_export_btn.setFixedWidth(100)
@@ -279,20 +299,24 @@ class MainWindow(QMainWindow):
         self.plot_btn.clicked.connect(self._plot_3d)
         self.plot_btn.setEnabled(False)
 
-        # Assemble
-        layout.addWidget(QLabel("Type:"))
-        layout.addWidget(self.plot_type_dropdown)
-        layout.addSpacing(10)
-        layout.addWidget(QLabel("Colormap:"))
-        layout.addWidget(self.cmap_dropdown)
-        layout.addSpacing(10)
-        layout.addWidget(QLabel("Smoothing:"))
-        layout.addWidget(self.smoothing_input)
-        layout.addStretch()
-        layout.addWidget(self.combined_export_btn)
-        layout.addWidget(self.plot_btn)
+        # Assemble (Row 0)
+        grid.addWidget(QLabel("Type:"), 0, 0)
+        grid.addWidget(self.plot_type_dropdown, 0, 1)
+        grid.addWidget(QLabel("Colormap:"), 0, 2)
+        grid.addWidget(self.cmap_dropdown, 0, 3)
+        grid.addWidget(QLabel("Smoothing:"), 0, 4)
+        grid.addWidget(self.smoothing_input, 0, 5)
+        grid.addWidget(self.baseline_3d_checkbox, 0, 6)
+        grid.addWidget(self.baseline_3d_min_input, 0, 7)
+        grid.addWidget(self.baseline_3d_max_input, 0, 8)
 
-        group.setLayout(layout)
+        # Row 1: right-aligned action buttons
+        spacer = QSpacerItem(20, 10, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        grid.addItem(spacer, 1, 0, 1, 7)
+        grid.addWidget(self.combined_export_btn, 1, 7)
+        grid.addWidget(self.plot_btn, 1, 8)
+
+        group.setLayout(grid)
         return group
 
     # ------------------------
@@ -679,12 +703,29 @@ class MainWindow(QMainWindow):
 
         smoothing_factor = self.smoothing_input.text() or None
 
+        # Baseline configuration to pass to dialog
+        bl_enabled = self.baseline_3d_checkbox.isChecked()
+        bl_min = None
+        bl_max = None
+        if bl_enabled:
+            try:
+                bl_min = float(self.baseline_3d_min_input.text()) if self.baseline_3d_min_input.text() else None
+            except ValueError:
+                bl_min = None
+            try:
+                bl_max = float(self.baseline_3d_max_input.text()) if self.baseline_3d_max_input.text() else None
+            except ValueError:
+                bl_max = None
+
         self.three_d_dialog = ThreeDPlotDialog(
             data_to_plot,
             plot_type,
             cmap,
             smoothing_factor,
-            self
+            baseline_enabled=bl_enabled,
+            baseline_min=bl_min,
+            baseline_max=bl_max,
+            parent=self
         )
         self.three_d_dialog.show()
 
