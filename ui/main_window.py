@@ -11,7 +11,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
 import numpy as np
 
-from app.ui.info_dialog import InfoDialog
+from ui.info_dialog import InfoDialog
 from ui.convert_dialog import ConvertDialog
 from ui.spectra_plot_dialog import SpectraPlotDialog
 from ui.three_d_plot_dialog import ThreeDPlotDialog
