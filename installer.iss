@@ -2,7 +2,7 @@
 
 [Setup]
 AppName=Opus Spectrum Visualizator
-AppVersion=1.4.3
+AppVersion=1.5
 AppId={{14DBC78D-7245-4D78-B431-1E662A905EFA}}
 DefaultDirName={pf}\Opus Spectrum Visualizator
 DefaultGroupName=Opus Spectrum Visualizator
