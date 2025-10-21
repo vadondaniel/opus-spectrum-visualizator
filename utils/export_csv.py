@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QFileDialog, QWidget
 import pandas as pd
 import numpy as np
+from utils.peak_analysis import compute_peak_areas
 
 
 def export_spectra_csv(
@@ -142,30 +143,14 @@ def export_peak_analysis_csv(
     if not filename:  # user cancelled
         return None
 
-    # Helper: trapezoid baseline correction, then width-weighted area
-    def _baseline_trapezoid(wn: np.ndarray, ab: np.ndarray) -> np.ndarray:
-        wn = np.asarray(wn, dtype=float)
-        ab = np.asarray(ab, dtype=float)
-        shifted = ab + 1.0
-        if len(wn) >= 2 and wn[0] != wn[-1]:
-            x0, x1 = wn[0], wn[-1]
-            y0, y1 = shifted[0], shifted[-1]
-            slope = (y1 - y0) / (x1 - x0)
-            baseline = y0 + slope * (wn - x0)
-            return shifted - baseline
-        return shifted
+    # Compute unified peak areas (trapezoid baseline correction + width-weighted integration)
+    temperatures_sorted, results = compute_peak_areas(
+        combined_list, wavelength_ranges, baseline_mode="trapezoid")
 
-    def _integrate_peak_area(wn: np.ndarray, ab: np.ndarray) -> float:
-        if len(wn) < 2:
-            return float(np.sum(ab))
-        widths = np.abs(np.diff(wn))
-        return float(np.sum(widths * ab[1:]))
-
-    # Extract arrays and temperature ordering
+    # Sort timestamps the same way as temperatures
     timestamps = np.array([e.get("timestamp", np.nan) for e in combined_list])
     temperatures = np.array([e["temperature"] for e in combined_list], dtype=float)
     sort_idx = np.argsort(temperatures)
-    temperatures_sorted = temperatures[sort_idx]
     timestamps_sorted = timestamps[sort_idx].astype(np.int64)
 
     data = {
@@ -174,21 +159,7 @@ def export_peak_analysis_csv(
     }
 
     for (start_wavelength, end_wavelength) in wavelength_ranges:
-        areas = []
-        for e in combined_list:
-            wn = np.asarray(e["wavenumbers"], dtype=float)
-            ab = np.asarray(e["absorbance"], dtype=float)
-            mask = (wn >= start_wavelength) & (wn <= end_wavelength)
-            wn_slice = wn[mask]
-            ab_slice = ab[mask]
-            if wn_slice.size == 0:
-                areas.append(0.0)
-                continue
-            ab_corr = _baseline_trapezoid(wn_slice, ab_slice)
-            area = _integrate_peak_area(wn_slice, ab_corr)
-            areas.append(area)
-
-        data[f"{start_wavelength}-{end_wavelength} cm^-1"] = np.array(areas, dtype=float)[sort_idx]
+        data[f"{start_wavelength}-{end_wavelength} cm^-1"] = results[(start_wavelength, end_wavelength)]
 
     df = pd.DataFrame(data)
     df.to_csv(filename, index=False)

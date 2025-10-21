@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import numpy as np
 
 from utils.smoothing import gaussian_kernel_smooth, loess_1d, moving_average, smooth_combined_by_temperature, spline_safe_normalized
+from utils.peak_analysis import compute_peak_areas
 
 
 def plot_spectra(ax, spectra_data, start_index=0, end_index=None, normalize=False):
@@ -267,14 +268,13 @@ def plot_peak_analysis(
     if not combined_list:
         return None, None
 
-    temperatures = np.array([e["temperature"]
-                            for e in combined_list], dtype=float)
-    sort_idx = np.argsort(temperatures)
-    temperatures = temperatures[sort_idx]
+    temps_sorted, results = compute_peak_areas(
+        combined_list, wavelength_ranges, baseline_mode=baseline_correction_mode)
+    if temps_sorted is None:
+        return None, None
 
-    T_grid = np.linspace(temperatures.min(), temperatures.max(),
+    T_grid = np.linspace(temps_sorted.min(), temps_sorted.max(),
                          grid_points) if eval_on_grid else None
-    results = {}
     base_colors = plt.cm.tab10.colors
     base_markers = ["o", "s", "D", "*", "X", "^", "h", "p", "v", "d"]
 
@@ -287,36 +287,10 @@ def plot_peak_analysis(
         color = base_colors[i % len(base_colors)]
         marker = base_markers[i % len(base_markers)]
 
-        # Apply baseline correction to each spectrum slice and integrate with variable dx
-        summed_list = []
-        for e in combined_list:
-            mask = (np.asarray(e["wavenumbers"]) >= start_w) & (np.asarray(e["wavenumbers"]) <= end_w)
-            wn_slice = np.asarray(e["wavenumbers"])[mask]
-            abs_slice = np.asarray(e["absorbance"])[mask].astype(float)
-
-            # If baseline correction mode requires at least two points, skip if not available
-            if baseline_correction_mode != "none" and len(wn_slice) >= 2 and (wn_slice[0] != wn_slice[-1]):
-                abs_corr = baseline_correction(wn_slice, abs_slice, baseline_correction_mode)
-            else:
-                abs_corr = abs_slice
-
-            # Numerical integration using per-interval width:
-            # area = sum( abs_corr[i] * (wn[i] - wn[i-1]) ), i = 1..N-1
-            # Use absolute width in case wavenumbers are decreasing.
-            if len(wn_slice) >= 2:
-                widths = np.abs(np.diff(wn_slice))
-                # Right-rectangle rule using baseline-corrected absorbance
-                area = float(np.sum(widths * abs_corr[1:]))
-            else:
-                area = float(np.sum(abs_corr))  # degenerate case
-
-            summed_list.append(area)
-
-        summed_absorbance = np.array(summed_list, dtype=float)[sort_idx]
-        results[(start_w, end_w)] = summed_absorbance
+        areas = results[(start_w, end_w)]
 
         # --- smoothing ---
-        x_eval = T_grid if eval_on_grid else temperatures
+        x_eval = T_grid if eval_on_grid else temps_sorted
         smoothed = None
         param = smoothing_param if smoothing_param is not None else (
             window_size if smoothing in ("boxcar", "gaussian") else 0.3)
@@ -325,25 +299,25 @@ def plot_peak_analysis(
             if smoothing == "boxcar":
                 width = float(param)
                 smoothed = np.array([
-                    np.mean(summed_absorbance[np.abs(
-                        temperatures - T0) <= width / 2])
+                    np.mean(areas[np.abs(
+                        temps_sorted - T0) <= width / 2])
                     for T0 in x_eval
                 ])
             elif smoothing == "gaussian":
                 _, smoothed = gaussian_kernel_smooth(
-                    temperatures, summed_absorbance, float(param), x_eval=x_eval)
+                    temps_sorted, areas, float(param), x_eval=x_eval)
             elif smoothing == "loess":
                 _, smoothed = loess_1d(
-                    temperatures, summed_absorbance, frac=float(param), x_eval=x_eval)
+                    temps_sorted, areas, frac=float(param), x_eval=x_eval)
             elif smoothing == "spline":
                 smoothed = spline_safe_normalized(
-                    temperatures, summed_absorbance, x_eval, float(param))
+                    temps_sorted, areas, x_eval, float(param))
 
         label = f"{start_w}-{end_w}"
 
         # --- plotting ---
         if display_type in ("raw", "both"):
-            ax.plot(temperatures, summed_absorbance, marker=marker,
+            ax.plot(temps_sorted, areas, marker=marker,
                     linestyle='-', color=color, label=label)
         if smoothed is not None:
             smoothed_label = label if display_type == "smoothed" else None
@@ -364,44 +338,7 @@ def plot_peak_analysis(
     ax.grid(True)
     ax.legend()
     fig.tight_layout()
-    return temperatures, results
+    return temps_sorted, results
 
 
-def baseline_correction(wavenumbers, absorbance, mode="none"):
-    """
-    Baseline correction for absorbance data.
-
-    Parameters
-    ----------
-    temperatures : array-like
-        X values (e.g. temperatures, can be unevenly spaced).
-    absorbance : array-like
-        Y values (absorbance).
-    mode : {"none", "trapezoid"}, default "none"
-        - "none": no correction
-        - "trapezoid": add +1 to absorbance, subtract trapezoid baseline
-                       (line between endpoints relative to x-axis)
-    """
-    wavns = np.asarray(wavenumbers, dtype=float)
-    absb = np.asarray(absorbance, dtype=float).copy()
-
-    if mode == "none":
-        return absb
-
-    if mode == "trapezoid":
-        # step 1: shift absorbance by +1
-        shifted = absb + 1.0
-
-        # step 2: baseline is straight line from (x0,y0) to (x1,y1)
-        x0, x1 = wavns[0], wavns[-1]
-        y0, y1 = shifted[0], shifted[-1]
-
-        slope = (y1 - y0) / (x1 - x0)
-        baseline = y0 + slope * (wavns - x0)
-
-        # step 3: subtract baseline from shifted absorbance
-        corrected = shifted - baseline
-
-        return corrected
-
-    raise ValueError(f"Unknown baseline correction mode: {mode!r}")
+# baseline correction is now unified in utils/peak_analysis.py
