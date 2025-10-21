@@ -12,6 +12,7 @@ from PyQt6.QtGui import QIcon
 import numpy as np
 
 from ui.info_window import InfoWindow
+from ui.convert_dialog import ConvertDialog
 from ui.spectra_plot_dialog import SpectraPlotDialog
 from ui.three_d_plot_dialog import ThreeDPlotDialog
 from ui.peak_analysis_dialog import PeakAnalysisDialog
@@ -112,9 +113,17 @@ class MainWindow(QMainWindow):
         self.spectrum_btn.setToolTip(
             "Select the folder containing spectrum files")
         self.spectrum_btn.clicked.connect(self.select_spectrum_folder)
+        # Convert button (enabled when a spectrum folder is selected)
+        self.convert_btn = QPushButton("Convert")
+        self.convert_btn.setFixedWidth(100)
+        self.convert_btn.setEnabled(False)
+        self.convert_btn.setToolTip(
+            "Convert OPUS files in the selected folder")
+        self.convert_btn.clicked.connect(self._open_convert_dialog)
         spec_layout.addWidget(QLabel("Spectrum:"))
         spec_layout.addWidget(self.spectrum_label)
         spec_layout.addStretch()
+        spec_layout.addWidget(self.convert_btn)
         spec_layout.addWidget(self.spectrum_btn)
 
         # Temperature row
@@ -421,6 +430,18 @@ class MainWindow(QMainWindow):
     def _update_start_enabled(self):
         self.process_btn.setEnabled(
             bool(self.spectrum_path and self.temp_file))
+        # Enable Convert when a spectrum folder is selected
+        self.convert_btn.setEnabled(bool(self.spectrum_path))
+
+    def _open_convert_dialog(self):
+        if not self.spectrum_path:
+            QMessageBox.warning(
+                self, "Convert", "Please select a spectrum folder first.")
+            return
+        # Open non-blocking convert dialog with input folder preselected
+        self.convert_dialog = ConvertDialog(
+            input_folder=self.spectrum_path, parent=self)
+        self.convert_dialog.show()
 
     def start_processing(self):
         self.spectrum_list = []

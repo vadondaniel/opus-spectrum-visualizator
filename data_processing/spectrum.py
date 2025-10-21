@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 import re
+import csv
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -80,7 +81,7 @@ def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
         Exception: If there is an error reading the file or extracting data, the exception will be raised.
 
         Example:
-        >>> file_path = "/path/to/opus/file.opus"
+        >>> file_path = "/path/to/opus/file"
         >>> spectrum_data = read_file(file_path)
         """
         nonlocal completed
@@ -205,3 +206,156 @@ def natural_sort_key(s):
     Splits text into digit and non-digit chunks for proper numeric order.
     """
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]
+
+
+def convert_opus_to_csv(input_folder, output_folder=None, progress_callback=None, max_workers=4):
+    """
+    Converts all OPUS files in a folder to CSV files containing wavenumber and absorbance data.
+
+    Parameters:
+    - input_folder (str or Path): Folder containing Opus files.
+    - output_folder (str or Path, optional): Destination folder for .csv files.
+      Defaults to 'converted_csv' inside the input folder.
+    - progress_callback (function, optional): Function that receives progress messages.
+    - max_workers (int, optional): Number of parallel threads for faster conversion.
+
+    Returns:
+    - list of Path: Paths to the created CSV files.
+    """
+    input_folder = Path(input_folder)
+    output_folder = Path(
+        output_folder) if output_folder else input_folder / "converted_csv"
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    all_paths = sorted(input_folder.rglob("*"), key=natural_sort_key)
+    exclude_exts = {".csv", ".txt"}
+    opus_files = [
+        p for p in all_paths
+        if p.is_file() and p.suffix.lower() not in exclude_exts
+    ]
+    total_files = len(opus_files)
+
+    if not opus_files:
+        msg = f"No files found in {input_folder}"
+        if progress_callback:
+            progress_callback(msg)
+        else:
+            print(msg)
+        return []
+
+    def convert_file(opus_path):
+        try:
+            X = read_opus(opus_path)
+            wavenumbers = X.x.to('1/cm').data
+            absorbance = X.data[0]
+            base_name = opus_path.name
+            csv_path = output_folder / (base_name + ".csv")
+
+            with open(csv_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Wavenumber (1/cm)", "Absorbance"])
+                writer.writerows(zip(wavenumbers, absorbance))
+
+            return csv_path
+        except Exception as e:
+            return f"Error processing {opus_path.name}: {e}"
+
+    converted = []
+    completed = 0
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(convert_file, f): f for f in opus_files}
+        for future in as_completed(futures):
+            result = future.result()
+            converted.append(result)
+            completed += 1
+            percent = completed / total_files * 100
+            msg = f"{percent:.1f}%"
+            if progress_callback:
+                progress_callback(msg)
+            else:
+                print(msg)
+
+    if progress_callback:
+        progress_callback("Conversion complete.")
+    else:
+        print("Conversion complete.")
+
+    return converted
+
+
+def convert_opus_to_txt(input_folder, output_folder=None, progress_callback=None, max_workers=4):
+    """
+    Converts all OPUS files in a folder to TXT files (tab-separated) containing
+    wavenumber and absorbance data.
+
+    Parameters:
+    - input_folder (str or Path): Folder containing Opus files.
+    - output_folder (str or Path, optional): Destination folder for .txt files.
+      Defaults to 'converted_txt' inside the input folder.
+    - progress_callback (function, optional): Function that receives progress messages.
+    - max_workers (int, optional): Number of parallel threads for faster conversion.
+
+    Returns:
+    - list of Path: Paths to the created TXT files.
+    """
+    input_folder = Path(input_folder)
+    output_folder = Path(
+        output_folder) if output_folder else input_folder / "converted_txt"
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    all_paths = sorted(input_folder.rglob("*"), key=natural_sort_key)
+    exclude_exts = {".csv", ".txt"}
+    opus_files = [
+        p for p in all_paths
+        if p.is_file() and p.suffix.lower() not in exclude_exts
+    ]
+    total_files = len(opus_files)
+
+    if not opus_files:
+        msg = f"No files found in {input_folder}"
+        if progress_callback:
+            progress_callback(msg)
+        else:
+            print(msg)
+        return []
+
+    def convert_file(opus_path):
+        try:
+            X = read_opus(opus_path)
+            wavenumbers = X.x.to('1/cm').data
+            absorbance = X.data[0]
+            base_name = opus_path.name
+            txt_path = output_folder / (base_name + ".txt")
+
+            with open(txt_path, "w", newline="") as f:
+                writer = csv.writer(f, delimiter='\t')
+                writer.writerow(["Wavenumber (1/cm)", "Absorbance"])
+                writer.writerows(zip(wavenumbers, absorbance))
+
+            return txt_path
+        except Exception as e:
+            return f"Error processing {opus_path.name}: {e}"
+
+    converted = []
+    completed = 0
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(convert_file, f): f for f in opus_files}
+        for future in as_completed(futures):
+            result = future.result()
+            converted.append(result)
+            completed += 1
+            percent = completed / total_files * 100
+            msg = f"{percent:.1f}%"
+            if progress_callback:
+                progress_callback(msg)
+            else:
+                print(msg)
+
+    if progress_callback:
+        progress_callback("Conversion complete.")
+    else:
+        print("Conversion complete.")
+
+    return converted
