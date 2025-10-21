@@ -206,15 +206,25 @@ class ThreeDPlotDialog(QDialog):
         settings_layout.addSpacing(10)
         settings_layout.addWidget(QLabel("Smoothing:"))
         settings_layout.addWidget(self.smoothing_input)
-        settings_layout.addSpacing(10)
-        settings_layout.addWidget(QLabel("Baseline:"))
-        settings_layout.addWidget(self.baseline_checkbox)
-        settings_layout.addWidget(self.bl_min_input)
-        settings_layout.addWidget(QLabel("–"))
-        settings_layout.addWidget(self.bl_max_input)
         settings_layout.addStretch()
         settings_group.setLayout(settings_layout)
-        main_layout.addWidget(settings_group)
+
+        # Baseline correction in its own group, placed next to Plot Settings
+        bl_group = QGroupBox("Baseline Correction (3D)")
+        bl_layout = QHBoxLayout()
+        bl_layout.addWidget(self.baseline_checkbox)
+        bl_layout.addSpacing(8)
+        bl_layout.addWidget(QLabel("Wn min:"))
+        bl_layout.addWidget(self.bl_min_input)
+        bl_layout.addWidget(QLabel("Wn max:"))
+        bl_layout.addWidget(self.bl_max_input)
+        bl_layout.addStretch()
+        bl_group.setLayout(bl_layout)
+
+        settings_row = QHBoxLayout()
+        settings_row.addWidget(settings_group)
+        settings_row.addWidget(bl_group)
+        main_layout.addLayout(settings_row)
 
         self.update_plot()
 

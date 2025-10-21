@@ -243,10 +243,9 @@ class MainWindow(QMainWindow):
     # ------------------------
     def _create_visualization_group(self):
         group = QGroupBox("3D Plotting")
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(8)
-        grid.setVerticalSpacing(8)
-        grid.setContentsMargins(10, 6, 10, 6)
+        vbox = QVBoxLayout()
+        vbox.setSpacing(8)
+        vbox.setContentsMargins(10, 6, 10, 6)
 
         # Plot type
         self.plot_type_dropdown = QComboBox()
@@ -269,7 +268,7 @@ class MainWindow(QMainWindow):
         self.smoothing_input.setToolTip("Enter smoothing factor (optional)")
 
         # Baseline correction (3D) toggle and inputs
-        self.baseline_3d_checkbox = QCheckBox("Baseline (3D)")
+        self.baseline_3d_checkbox = QCheckBox("Baseline Correction")
         self.baseline_3d_checkbox.setToolTip(
             "Enable linear baseline subtraction between two wavenumbers for 3D plot")
         self.baseline_3d_min_input = QLineEdit()
@@ -295,28 +294,34 @@ class MainWindow(QMainWindow):
         self.combined_export_btn.setEnabled(False)
 
         self.plot_btn = QPushButton("Plot 3D")
-        self.plot_btn.setFixedWidth(90)
+        self.plot_btn.setFixedWidth(100)
         self.plot_btn.clicked.connect(self._plot_3d)
         self.plot_btn.setEnabled(False)
 
-        # Assemble (Row 0)
-        grid.addWidget(QLabel("Type:"), 0, 0)
-        grid.addWidget(self.plot_type_dropdown, 0, 1)
-        grid.addWidget(QLabel("Colormap:"), 0, 2)
-        grid.addWidget(self.cmap_dropdown, 0, 3)
-        grid.addWidget(QLabel("Smoothing:"), 0, 4)
-        grid.addWidget(self.smoothing_input, 0, 5)
-        grid.addWidget(self.baseline_3d_checkbox, 0, 6)
-        grid.addWidget(self.baseline_3d_min_input, 0, 7)
-        grid.addWidget(self.baseline_3d_max_input, 0, 8)
+        # Row 0: Type, Colormap, Smoothing (left) + Export (right)
+        top_row = QHBoxLayout()
+        top_row.setSpacing(8)
+        top_row.addWidget(QLabel("Type:"))
+        top_row.addWidget(self.plot_type_dropdown)
+        top_row.addWidget(QLabel("Colormap:"))
+        top_row.addWidget(self.cmap_dropdown)
+        top_row.addWidget(QLabel("Smoothing:"))
+        top_row.addWidget(self.smoothing_input)
+        top_row.addStretch()
+        top_row.addWidget(self.combined_export_btn)
+        vbox.addLayout(top_row)
 
-        # Row 1: right-aligned action buttons
-        spacer = QSpacerItem(20, 10, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        grid.addItem(spacer, 1, 0, 1, 7)
-        grid.addWidget(self.combined_export_btn, 1, 7)
-        grid.addWidget(self.plot_btn, 1, 8)
+        # Row 1: Baseline (left) + Plot 3D (right)
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(8)
+        bottom_row.addWidget(self.baseline_3d_checkbox)
+        bottom_row.addWidget(self.baseline_3d_min_input)
+        bottom_row.addWidget(self.baseline_3d_max_input)
+        bottom_row.addStretch()
+        bottom_row.addWidget(self.plot_btn)
+        vbox.addLayout(bottom_row)
 
-        group.setLayout(grid)
+        group.setLayout(vbox)
         return group
 
     # ------------------------
