@@ -11,7 +11,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
 import numpy as np
 
-from ui.info_window import InfoWindow
+from app.ui.info_dialog import InfoDialog
 from ui.convert_dialog import ConvertDialog
 from ui.spectra_plot_dialog import SpectraPlotDialog
 from ui.three_d_plot_dialog import ThreeDPlotDialog
@@ -380,7 +380,7 @@ class MainWindow(QMainWindow):
     # Info Windows
     # ------------------------
     def show_info(self, title, text):
-        self.info_win = InfoWindow(title, text)
+        self.info_win = InfoDialog(title, text)
         self.info_win.show()
 
     def show_howto(self):

@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
 )
 
 
-class InfoWindow(QDialog):
+class InfoDialog(QDialog):
     def __init__(self, title, text, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
