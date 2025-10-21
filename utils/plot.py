@@ -287,7 +287,7 @@ def plot_peak_analysis(
         color = base_colors[i % len(base_colors)]
         marker = base_markers[i % len(base_markers)]
 
-        # Apply baseline correction to each spectrum slice before summing
+        # Apply baseline correction to each spectrum slice and integrate with variable dx
         summed_list = []
         for e in combined_list:
             mask = (np.asarray(e["wavenumbers"]) >= start_w) & (np.asarray(e["wavenumbers"]) <= end_w)
@@ -300,7 +300,17 @@ def plot_peak_analysis(
             else:
                 abs_corr = abs_slice
 
-            summed_list.append(np.sum(abs_corr))
+            # Numerical integration using per-interval width:
+            # area = sum( abs_corr[i] * (wn[i] - wn[i-1]) ), i = 1..N-1
+            # Use absolute width in case wavenumbers are decreasing.
+            if len(wn_slice) >= 2:
+                widths = np.abs(np.diff(wn_slice))
+                # Right-rectangle rule using baseline-corrected absorbance
+                area = float(np.sum(widths * abs_corr[1:]))
+            else:
+                area = float(np.sum(abs_corr))  # degenerate case
+
+            summed_list.append(area)
 
         summed_absorbance = np.array(summed_list, dtype=float)[sort_idx]
         results[(start_w, end_w)] = summed_absorbance
@@ -341,7 +351,7 @@ def plot_peak_analysis(
                     color=color, label=smoothed_label)
 
     ax.set_xlabel("Temperature (K)")
-    ax.set_ylabel("Integrated Absorbance")
+    ax.set_ylabel("Peak Area")
     if len(wavelength_ranges) == 1:
         title = "Peak Analysis"
     elif len(wavelength_ranges) == 2:

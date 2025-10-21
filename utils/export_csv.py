@@ -142,29 +142,53 @@ def export_peak_analysis_csv(
     if not filename:  # user cancelled
         return None
 
-    # Extract arrays
+    # Helper: trapezoid baseline correction, then width-weighted area
+    def _baseline_trapezoid(wn: np.ndarray, ab: np.ndarray) -> np.ndarray:
+        wn = np.asarray(wn, dtype=float)
+        ab = np.asarray(ab, dtype=float)
+        shifted = ab + 1.0
+        if len(wn) >= 2 and wn[0] != wn[-1]:
+            x0, x1 = wn[0], wn[-1]
+            y0, y1 = shifted[0], shifted[-1]
+            slope = (y1 - y0) / (x1 - x0)
+            baseline = y0 + slope * (wn - x0)
+            return shifted - baseline
+        return shifted
+
+    def _integrate_peak_area(wn: np.ndarray, ab: np.ndarray) -> float:
+        if len(wn) < 2:
+            return float(np.sum(ab))
+        widths = np.abs(np.diff(wn))
+        return float(np.sum(widths * ab[1:]))
+
+    # Extract arrays and temperature ordering
     timestamps = np.array([e.get("timestamp", np.nan) for e in combined_list])
     temperatures = np.array([e["temperature"] for e in combined_list], dtype=float)
     sort_idx = np.argsort(temperatures)
-    temperatures = temperatures[sort_idx]
-    timestamps = timestamps[sort_idx]
-    
-    timestamps = timestamps.astype(np.int64)
+    temperatures_sorted = temperatures[sort_idx]
+    timestamps_sorted = timestamps[sort_idx].astype(np.int64)
 
     data = {
-        "Timestamp": timestamps,
-        "Temperature (K)": temperatures  # np.round(temperatures, 4)
+        "Timestamp": timestamps_sorted,
+        "Temperature (K)": temperatures_sorted
     }
 
     for (start_wavelength, end_wavelength) in wavelength_ranges:
-        summed_absorbance = np.array([
-            np.sum(e["absorbance"][(e["wavenumbers"] >= start_wavelength) &
-                                   (e["wavenumbers"] <= end_wavelength)])
-            for e in combined_list
-        ], dtype=float)[sort_idx]
+        areas = []
+        for e in combined_list:
+            wn = np.asarray(e["wavenumbers"], dtype=float)
+            ab = np.asarray(e["absorbance"], dtype=float)
+            mask = (wn >= start_wavelength) & (wn <= end_wavelength)
+            wn_slice = wn[mask]
+            ab_slice = ab[mask]
+            if wn_slice.size == 0:
+                areas.append(0.0)
+                continue
+            ab_corr = _baseline_trapezoid(wn_slice, ab_slice)
+            area = _integrate_peak_area(wn_slice, ab_corr)
+            areas.append(area)
 
-        col_name = f"{start_wavelength}-{end_wavelength} cm^-1"
-        data[col_name] = summed_absorbance
+        data[f"{start_wavelength}-{end_wavelength} cm^-1"] = np.array(areas, dtype=float)[sort_idx]
 
     df = pd.DataFrame(data)
     df.to_csv(filename, index=False)
