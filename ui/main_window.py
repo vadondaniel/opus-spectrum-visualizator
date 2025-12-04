@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import sys
+import json
+import threading
+import urllib.error
+import urllib.request
+from typing import Optional
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QFileDialog, QProgressBar, QLineEdit, QMessageBox,
-    QComboBox, QGroupBox, QDoubleSpinBox, QGridLayout, QSpacerItem, QSizePolicy, QCheckBox
+    QComboBox, QGroupBox, QDoubleSpinBox, QGridLayout, QSpacerItem, QSizePolicy, QCheckBox,
+    QDialogButtonBox
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QIcon
 import numpy as np
+from packaging import version as packaging_version
 
 from ui.info_dialog import InfoDialog
 from ui.convert_dialog import ConvertDialog
@@ -26,9 +33,20 @@ from utils.export_csv import (
 )
 
 
+APP_VERSION = "1.5"
+LATEST_RELEASE_API = "https://api.github.com/repos/vadondaniel/opus-spectrum-visualizator/releases/latest"
+LATEST_RELEASE_PAGE = "https://github.com/vadondaniel/opus-spectrum-visualizator/releases/latest"
+UPDATE_STATE_FILE = Path.home() / ".opus_visualizer_state.json"
+
+
 class MainWindow(QMainWindow):
+    update_available = pyqtSignal(str, str, str, bool)
+    update_status = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
+        self.update_available.connect(self._show_update_notice)
+        self.update_status.connect(self._show_update_status)
         self._init_state()
         self._setup_window()
         self._setup_ui()
@@ -45,6 +63,9 @@ class MainWindow(QMainWindow):
         self.spectrum_path = None
         self.temp_file = None
         self.peak_baseline_method = "trapezoid"
+        self._update_notice_shown = False
+        self._update_thread_started = False
+        self._dismissed_update_version = self._load_update_state()
 
     def _setup_window(self):
         """Basic window properties."""
@@ -75,6 +96,7 @@ class MainWindow(QMainWindow):
 
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
+        QTimer.singleShot(0, self._check_for_updates)
 
     # ------------------------
     # Menu Bar
@@ -93,6 +115,11 @@ class MainWindow(QMainWindow):
         credits_action = help_menu.addAction("Credits")
         credits_action.setToolTip("Show credits and acknowledgments")
         credits_action.triggered.connect(self.show_credits)
+
+        check_updates_action = help_menu.addAction("Check for Updates")
+        check_updates_action.setToolTip("Check online for newer versions")
+        check_updates_action.triggered.connect(
+            lambda: self._check_for_updates(force_notify=True))
 
         return menubar
 
@@ -425,7 +452,7 @@ class MainWindow(QMainWindow):
         """)
 
     def show_credits(self):
-        self.show_info("Credits", """
+        self.show_info("Credits", f"""
             <h2>Credits</h2>
             <p>This application was built using the following libraries:
             <ul>
@@ -436,9 +463,8 @@ class MainWindow(QMainWindow):
                 <li><a href="https://github.com/spectrochempy/spectrochempy">SpectroChemPy</a> (CeCILL-B/C): OPUS file handling and spectroscopic data processing</li>
             </ul>
             <b>Developed by:</b> Dániel Vadon & Dr. Bálint Rubovszky</p>
-            <p><b>Version:</b> 1.5 <a href="https://github.com/vadondaniel/opus-spectrum-visualizator">GitHub</a></p>
+            <p><b>Version:</b> {APP_VERSION} <a href="https://github.com/vadondaniel/opus-spectrum-visualizator">GitHub</a></p>
         """)
-        # TODO: latest version check
 
     # === Slots ===
     def select_spectrum_folder(self):
@@ -868,6 +894,148 @@ class MainWindow(QMainWindow):
             msg.setText("Export cancelled.")
 
         msg.exec()
+
+    # ------------------------
+    # Update checks
+    # ------------------------
+    def _check_for_updates(self, force_notify: bool = False):
+        if not force_notify:
+            if self._update_thread_started:
+                return
+            self._update_thread_started = True
+
+        def worker(force_flag: bool):
+            info = self._fetch_latest_release_info()
+            if not info:
+                if force_flag:
+                    self.update_status.emit("Unable to check for updates. Please try again later.")
+                return
+            display_version, normalized_version, release_url = info
+            if not normalized_version:
+                if force_flag:
+                    self.update_status.emit("Unable to determine the latest version. Please try again later.")
+                return
+            if self._is_newer_version(normalized_version):
+                if not force_flag and self._dismissed_update_version == normalized_version:
+                    return
+                self.update_available.emit(
+                    display_version or normalized_version,
+                    normalized_version,
+                    release_url,
+                    force_flag
+                )
+            elif force_flag:
+                self.update_status.emit("You're already running the latest version.")
+
+        threading.Thread(target=worker, args=(force_notify,), daemon=True).start()
+
+    def _fetch_latest_release_info(self):
+        try:
+            request = urllib.request.Request(
+                LATEST_RELEASE_API,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": f"OpusSpectrumVisualizer/{APP_VERSION}"
+                }
+            )
+            with urllib.request.urlopen(request, timeout=8) as response:
+                encoding = response.headers.get_content_charset("utf-8")
+                payload = json.loads(response.read().decode(encoding))
+        except Exception as exc:
+            print(f"[UpdateCheck] Failed to check for updates: {exc}")
+            return None
+
+        latest_raw = (payload.get("tag_name") or payload.get("name") or "").strip()
+        release_url = payload.get("html_url") or LATEST_RELEASE_PAGE
+        normalized = self._clean_version_string(latest_raw)
+        display = latest_raw or normalized
+        if not display:
+            return None
+        return display, normalized, release_url
+
+    def _clean_version_string(self, raw: Optional[str]) -> Optional[str]:
+        if not raw:
+            return None
+        cleaned = raw.strip()
+        if cleaned.lower().startswith("v"):
+            cleaned = cleaned[1:]
+        cleaned = cleaned.split()[0]
+        cleaned = cleaned.split("-")[0]
+        return cleaned or None
+
+    def _is_newer_version(self, candidate: str) -> bool:
+        try:
+            return packaging_version.parse(candidate) > packaging_version.parse(APP_VERSION)
+        except Exception:
+            return candidate != APP_VERSION
+
+    def _show_update_notice(self, latest_version: str, normalized_version: str,
+                            release_url: str, force_show: bool):
+        if self._update_notice_shown and not force_show:
+            return
+        if not force_show and normalized_version and self._dismissed_update_version == normalized_version:
+            return
+        if not force_show:
+            self._update_notice_shown = True
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Update Available")
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setTextFormat(Qt.TextFormat.RichText)
+        display = latest_version.strip() if latest_version else "Latest release"
+        cleaned_display = self._clean_version_string(latest_version)
+        if cleaned_display:
+            display = cleaned_display
+        msg.setText(
+            f"A newer version (<b>{display}</b>) is available.<br>"
+            f"You are running <b>{APP_VERSION}</b>.<br><br>"
+            f'<a href="{release_url}">Download Update</a>'
+        )
+        msg.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        checkbox = None
+        if not force_show:
+            checkbox = QCheckBox("Don't show again")
+            button_box = msg.findChild(QDialogButtonBox)
+            if button_box and button_box.layout():
+                button_box.layout().insertWidget(0, checkbox)
+                button_box.layout().setAlignment(checkbox, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+            else:
+                msg.setCheckBox(checkbox)
+        msg.exec()
+
+        if checkbox and checkbox.isChecked() and normalized_version:
+            self._dismissed_update_version = normalized_version
+            self._save_update_state()
+
+    def _show_update_status(self, message: str):
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Update Check")
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setText(message)
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
+
+    def _load_update_state(self) -> Optional[str]:
+        try:
+            if UPDATE_STATE_FILE.exists():
+                with UPDATE_STATE_FILE.open("r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+                    value = data.get("dismissed_version")
+                    if isinstance(value, str):
+                        return value
+        except Exception as exc:
+            print(f"[UpdateCheck] Failed to load update state: {exc}")
+        return None
+
+    def _save_update_state(self):
+        try:
+            UPDATE_STATE_FILE.write_text(
+                json.dumps({"dismissed_version": self._dismissed_update_version}),
+                encoding="utf-8"
+            )
+        except Exception as exc:
+            print(f"[UpdateCheck] Failed to save update state: {exc}")
 
 # ---------------------- Launch ----------------------
 
