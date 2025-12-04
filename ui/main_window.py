@@ -44,6 +44,7 @@ class MainWindow(QMainWindow):
 
         self.spectrum_path = None
         self.temp_file = None
+        self.peak_baseline_method = "trapezoid"
 
     def _setup_window(self):
         """Basic window properties."""
@@ -772,9 +773,15 @@ class MainWindow(QMainWindow):
             display_type=display_type,
             smoothing=smoothing_method,
             smoothing_param=smoothing_param,
+            baseline_method=self.peak_baseline_method,
             parent=self
         )
+        self.peak_dialog.baseline_changed.connect(self._on_peak_baseline_changed)
         self.peak_dialog.show()
+
+    def _on_peak_baseline_changed(self, method: str):
+        if method:
+            self.peak_baseline_method = method
 
     def _on_export_spectra_csv_clicked(self):
         if not self.get_filtered_spectrum_list():
@@ -844,7 +851,11 @@ class MainWindow(QMainWindow):
             return
 
         filepath = export_peak_analysis_csv(
-            self.get_filtered_combined_list(), ranges, parent=self)
+            self.get_filtered_combined_list(),
+            ranges,
+            parent=self,
+            baseline_mode=self.peak_baseline_method
+        )
 
         msg = QMessageBox(self)
         msg.setWindowTitle("Export Result")

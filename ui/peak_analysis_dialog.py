@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QGroupBox, QHBoxLayout,
     QLabel, QComboBox, QDoubleSpinBox, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -10,9 +10,12 @@ from utils.plot import plot_peak_analysis
 
 
 class PeakAnalysisDialog(QDialog):
+    baseline_changed = pyqtSignal(str)
+
     def __init__(self, combined_list, wavelength_ranges,
                  display_type="both", smoothing="gaussian",
-                 smoothing_param=5.0, parent=None):
+                 smoothing_param=5.0, baseline_method="trapezoid",
+                 parent=None):
         super().__init__(parent)
         self.setWindowTitle("Peak Analysis")
         self.resize(900, 600)
@@ -30,7 +33,7 @@ class PeakAnalysisDialog(QDialog):
         self.display_type = display_type
         self.smoothing_method = smoothing
         self.smoothing_param = smoothing_param
-        self.baseline_method = "trapezoid"
+        self.baseline_method = (baseline_method or "trapezoid").lower()
 
         # --- Matplotlib figure ---
         self.fig, self.ax = plt.subplots(figsize=(10, 6))
@@ -146,6 +149,7 @@ class PeakAnalysisDialog(QDialog):
         
     def _on_baseline_changed(self, text):
         self.baseline_method = text.lower()
+        self.baseline_changed.emit(self.baseline_method)
         self._plot()
 
     def _plot(self):

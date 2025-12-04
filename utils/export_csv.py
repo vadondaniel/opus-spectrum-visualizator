@@ -119,7 +119,8 @@ def export_combined_data_csv(
 def export_peak_analysis_csv(
     combined_list,
     wavelength_ranges,
-    parent: QWidget = None
+    parent: QWidget = None,
+    baseline_mode: str = "trapezoid"
 ):
     """
     Export peak analysis to a CSV file chosen via file dialog.
@@ -128,6 +129,8 @@ def export_peak_analysis_csv(
         combined_list (list of dict): Each dict has "temperature", "wavenumbers", "absorbance".
         wavelength_ranges (list[tuple[float,float]]): [(start_wavenumber, end_wavenumber), ...]
         parent (QWidget): Optional parent widget for the file dialog.
+        baseline_mode (str): Baseline mode forwarded to compute_peak_areas so CSV
+            matches the plotted data (e.g., "trapezoid" or "none").
     """
     if not combined_list:
         raise ValueError("No combined data to export.")
@@ -145,7 +148,7 @@ def export_peak_analysis_csv(
 
     # Compute unified peak areas (trapezoid baseline correction + width-weighted integration)
     temperatures_sorted, results = compute_peak_areas(
-        combined_list, wavelength_ranges, baseline_mode="trapezoid")
+        combined_list, wavelength_ranges, baseline_mode=baseline_mode)
 
     # Sort timestamps the same way as temperatures
     timestamps = np.array([e.get("timestamp", np.nan) for e in combined_list])
