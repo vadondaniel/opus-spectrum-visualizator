@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (
     QLabel, QSizePolicy, QLineEdit
 )
 from PyQt6.QtCore import Qt, QTimer
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
 
 from ui.q_range_slider import QRangeSlider

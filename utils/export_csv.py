@@ -1,12 +1,15 @@
-from PyQt6.QtWidgets import QFileDialog, QWidget
+from typing import Optional
 import pandas as pd
 import numpy as np
+
+from PyQt6.QtWidgets import QFileDialog, QWidget
+
 from utils.peak_analysis import compute_peak_areas
 
 
 def export_spectra_csv(
     spectra_list,
-    parent: QWidget = None,
+    parent: Optional[QWidget] = None,
 ):
     """
     Export spectra_list (list of dicts with 'wavenumbers', 'absorbance') as a simple CSV.
@@ -55,7 +58,7 @@ def export_spectra_csv(
 
 def export_combined_data_csv(
     combined_list,
-    parent: QWidget = None,
+    parent: Optional[QWidget] = None,
     format: str = "long"
 ):
     """
@@ -119,7 +122,7 @@ def export_combined_data_csv(
 def export_peak_analysis_csv(
     combined_list,
     wavelength_ranges,
-    parent: QWidget = None,
+    parent: Optional[QWidget] = None,
     baseline_mode: str = "trapezoid"
 ):
     """

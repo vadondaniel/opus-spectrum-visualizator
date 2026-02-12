@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -17,7 +18,7 @@ class ConvertDialog(QDialog):
         self.setWindowTitle("Convert OPUS Files")
         self.input_folder = Path(input_folder)
         self.output_folder = Path(input_folder)
-        self.thread = None
+        self.worker_thread: Optional[ProcessingThread] = None
 
         self._setup_ui()
 
@@ -109,12 +110,12 @@ class ConvertDialog(QDialog):
         fmt = self.format_combo.currentText().lower()
         func = convert_opus_to_csv if fmt == "csv" else convert_opus_to_txt
 
-        self.thread = ProcessingThread(
+        self.worker_thread = ProcessingThread(
             func, self.input_folder, self.output_folder)
-        self.thread.progress_update.connect(self.progress.setValue)
-        self.thread.result_ready.connect(self._on_done)
-        self.thread.error.connect(self._on_error)
-        self.thread.start()
+        self.worker_thread.progress_update.connect(self.progress.setValue)
+        self.worker_thread.result_ready.connect(self._on_done)
+        self.worker_thread.error.connect(self._on_error)
+        self.worker_thread.start()
 
     def _on_error(self, message: str):
         self.status_label.setText("")

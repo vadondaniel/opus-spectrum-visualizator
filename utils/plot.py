@@ -1,6 +1,7 @@
 import os
 import tempfile
 import matplotlib.pyplot as plt
+from matplotlib import cm
 import plotly.graph_objects as go
 import numpy as np
 
@@ -178,6 +179,8 @@ def plot_3d(
         absorbances = absorbances[::step_m, ::step_n]
 
     # Create Plotly figure depending on type
+    fig: go.Figure | None = None
+
     if plot_type == "Surface":
         fig = go.Figure(data=[
             go.Surface(z=absorbances, x=wavenumbers,
@@ -229,6 +232,11 @@ def plot_3d(
             xaxis_title="Wavenumber (cm⁻¹)",
             yaxis_title="Temperature (K)"
         )
+    else:
+        raise ValueError(f"Unsupported plot type: {plot_type}")
+
+    if fig is None:
+        raise ValueError("Failed to create plotly figure.")
 
     # Layout
     fig.update_layout(title=f"Absorbance {plot_type} Plot")
@@ -273,9 +281,16 @@ def plot_peak_analysis(
     if temps_sorted is None:
         return None, None
 
-    T_grid = np.linspace(temps_sorted.min(), temps_sorted.max(),
-                         grid_points) if eval_on_grid else None
-    base_colors = plt.cm.tab10.colors
+    T_grid = None
+    if eval_on_grid:
+        try:
+            T_grid = np.linspace(temps_sorted.min(),
+                                 temps_sorted.max(),
+                                 grid_points)
+        except ValueError:
+            T_grid = None
+    base_cmap = cm.get_cmap("tab10")
+    base_colors = base_cmap(np.linspace(0, 1, base_cmap.N))
     base_markers = ["o", "s", "D", "*", "X", "^", "h", "p", "v", "d"]
 
     if ax is None:
@@ -290,7 +305,7 @@ def plot_peak_analysis(
         areas = results[(start_w, end_w)]
 
         # --- smoothing ---
-        x_eval = T_grid if eval_on_grid else temps_sorted
+        x_eval = T_grid if T_grid is not None else temps_sorted
         smoothed = None
         param = smoothing_param if smoothing_param is not None else (
             window_size if smoothing in ("boxcar", "gaussian") else 0.3)
@@ -319,7 +334,7 @@ def plot_peak_analysis(
         if display_type in ("raw", "both"):
             ax.plot(temps_sorted, areas, marker=marker,
                     linestyle='-', color=color, label=label)
-        if smoothed is not None:
+        if smoothed is not None and x_eval is not None:
             smoothed_label = label if display_type == "smoothed" else None
             ax.plot(x_eval, smoothed, linestyle='--', linewidth=2,
                     color=color, label=smoothed_label)

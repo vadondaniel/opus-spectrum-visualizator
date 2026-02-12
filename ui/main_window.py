@@ -11,10 +11,10 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QFileDialog, QProgressBar, QLineEdit, QMessageBox,
     QComboBox, QGroupBox, QDoubleSpinBox, QGridLayout, QSpacerItem, QSizePolicy, QCheckBox,
-    QDialogButtonBox
+    QDialogButtonBox, QMenuBar, QMenu, QBoxLayout
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QAction
 import numpy as np
 from packaging import version as packaging_version
 
@@ -103,23 +103,33 @@ class MainWindow(QMainWindow):
     # ------------------------
     def _create_menu_bar(self):
         menubar = self.menuBar()
+        if menubar is None:
+            # Some environments (notably on macOS without a native menu bar)
+            # may return None until a menu bar is explicitly created.
+            menubar = QMenuBar(self)
+            self.setMenuBar(menubar)
         help_menu = menubar.addMenu("Help")
+        if help_menu is None:
+            help_menu = QMenu("Help", self)
+            menubar.addMenu(help_menu)
 
         # How To Use
-        howto_action = help_menu.addAction("How To Use")
-        howto_action.setToolTip(
-            "Show instructions on how to use the application")
+        howto_action = QAction("How To Use", self)
+        howto_action.setToolTip("Show instructions on how to use the application")
         howto_action.triggered.connect(self.show_howto)
+        help_menu.addAction(howto_action)
 
         # Credits
-        credits_action = help_menu.addAction("Credits")
+        credits_action = QAction("Credits", self)
         credits_action.setToolTip("Show credits and acknowledgments")
         credits_action.triggered.connect(self.show_credits)
+        help_menu.addAction(credits_action)
 
-        check_updates_action = help_menu.addAction("Check for Updates")
+        check_updates_action = QAction("Check for Updates", self)
         check_updates_action.setToolTip("Check online for newer versions")
         check_updates_action.triggered.connect(
             lambda: self._check_for_updates(force_notify=True))
+        help_menu.addAction(check_updates_action)
 
         return menubar
 
@@ -789,9 +799,8 @@ class MainWindow(QMainWindow):
 
         display_type = self.display_type_dropdown.currentText().lower()
         smoothing_method = self.smoothing_method_dropdown.currentText().lower()
-        smoothing_param = None
-        if display_type != "raw":
-            smoothing_param = float(self.smoothing_param_spin.value())
+        smoothing_param = float(self.smoothing_param_spin.value())
+        # PeakAnalysisDialog requires a float even if raw data is shown; dialog ignores it in that case.
 
         self.peak_dialog = PeakAnalysisDialog(
             combined_list=self.get_filtered_combined_list(),
@@ -997,9 +1006,13 @@ class MainWindow(QMainWindow):
         if not force_show:
             checkbox = QCheckBox("Don't show again")
             button_box = msg.findChild(QDialogButtonBox)
-            if button_box and button_box.layout():
-                button_box.layout().insertWidget(0, checkbox)
-                button_box.layout().setAlignment(checkbox, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+            layout = button_box.layout() if button_box else None
+            if isinstance(layout, QBoxLayout):
+                layout.insertWidget(0, checkbox)
+                layout.setAlignment(
+                    checkbox,
+                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
+                )
             else:
                 msg.setCheckBox(checkbox)
         msg.exec()
@@ -1047,7 +1060,8 @@ def resource_path(rel_path: str) -> str:
     not the folder of this module (__file__).
     """
     if getattr(sys, "frozen", False):
-        base = Path(sys._MEIPASS)
+        meipass = getattr(sys, "_MEIPASS", None)
+        base = Path(meipass) if meipass else Path(sys.argv[0]).resolve().parent
     else:
         base = Path(sys.argv[0]).resolve().parent
     return str(base / rel_path)

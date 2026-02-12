@@ -1,5 +1,8 @@
+from typing import Optional
+
 from PyQt6.QtWidgets import QWidget, QStylePainter, QStyleOptionSlider
 from PyQt6.QtCore import Qt, QRect, pyqtSignal
+from PyQt6.QtGui import QPaintEvent, QMouseEvent
 
 
 class QRangeSlider(QWidget):
@@ -39,7 +42,8 @@ class QRangeSlider(QWidget):
         self.rangeChanged.emit(self._lower, self._upper)
         self.update()
 
-    def paintEvent(self, event):
+    def paintEvent(self, a0: Optional[QPaintEvent]):
+        del a0  # Unused; QWidget allows None so discard explicitly.
         painter = QStylePainter(self)
         opt = QStyleOptionSlider()
         opt.initFrom(self)
@@ -69,8 +73,10 @@ class QRangeSlider(QWidget):
                             self.height() // 2 - self._handle_size // 2,
                             self._handle_size, self._handle_size)
 
-    def mousePressEvent(self, event):
-        x = event.position().x()
+    def mousePressEvent(self, a0: Optional[QMouseEvent]):
+        if a0 is None:
+            return
+        x = a0.position().x()
         min_pos = self._valueToPos(self._lower)
         max_pos = self._valueToPos(self._upper)
         if abs(x - min_pos) < 10:
@@ -78,15 +84,18 @@ class QRangeSlider(QWidget):
         elif abs(x - max_pos) < 10:
             self._active_handle = "upper"
 
-    def mouseMoveEvent(self, event):
+    def mouseMoveEvent(self, a0: Optional[QMouseEvent]):
+        if a0 is None:
+            return
         if self._active_handle:
-            val = self._posToValue(event.position().x())
+            val = self._posToValue(a0.position().x())
             if self._active_handle == "lower":
                 self.setLowerValue(val)
             elif self._active_handle == "upper":
                 self.setUpperValue(val)
 
-    def mouseReleaseEvent(self, event):
+    def mouseReleaseEvent(self, a0: Optional[QMouseEvent]):
+        del a0
         self._active_handle = None
 
     def _valueToPos(self, value):
