@@ -30,8 +30,8 @@ def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
     list: A list of dictionaries containing the processed spectrum data from each OPUS file, where each
         dictionary has:
         - "file_path": The path to the processed file.
-        - "timestamp": The last modified time of the file (in Unix timestamp format).
-        - "datetime": The last modified time of the file (as a datetime object).
+        - "timestamp": The first OPUS history timestamp of the file (in Unix timestamp format).
+        - "datetime": The first OPUS history timestamp of the file (as a datetime object).
         - "wavenumbers": The wavenumber values (in cm^-1).
         - "absorbance": The absorbance values corresponding to the wavenumbers.
 
@@ -63,7 +63,7 @@ def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
         Reads an OPUS file and extracts spectrum data.
 
         This function takes the path to an OPUS file, reads its contents, and extracts relevant information
-        such as wavenumbers and absorbance values. It also captures the file's last modified timestamp.
+        such as wavenumbers and absorbance values. It also captures the earliest OPUS-internal timestamp.
 
         Parameters:
         file_path (str or Path): The path to the OPUS file to be read.
@@ -71,8 +71,8 @@ def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
         Returns:
         dict or None: A dictionary containing the processed spectrum data if successful, with the following keys:
             - "file_path": The path to the processed file.
-            - "timestamp": The last modified time of the file (in Unix timestamp format).
-            - "datetime": The last modified time of the file (as a datetime object).
+            - "timestamp": The first OPUS history timestamp (in Unix timestamp format).
+            - "datetime": The first OPUS history timestamp (as a datetime object).
             - "wavenumbers": The wavenumber values (in cm^-1).
             - "absorbance": The absorbance values corresponding to the wavenumbers.
           Returns None if the wavenumbers or absorbance values are not found.
@@ -86,9 +86,13 @@ def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
         """
         nonlocal completed
         try:
-            timestamp_unix = os.path.getmtime(file_path)
-            timestamp_dt = datetime.fromtimestamp(timestamp_unix)
             X = read_opus(file_path)
+            try:
+                timestamp_unix = float(X.meta["first_modified_timestamp"])
+            except Exception:
+                # Final fallback: filesystem timestamp if OPUS metadata is missing.
+                timestamp_unix = os.path.getmtime(file_path)
+            timestamp_dt = datetime.fromtimestamp(timestamp_unix)
             wavenumbers = X.x.to('1/cm').data
             absorbance = X.data[0]
             if wavenumbers is None or absorbance is None:

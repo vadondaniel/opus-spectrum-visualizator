@@ -12,6 +12,7 @@ __dataset_methods__ = __all__
 
 from datetime import datetime
 from datetime import timedelta
+import re
 
 import numpy as np
 
@@ -244,6 +245,12 @@ _units = {
     "Kubelka-Munk": "Kubelka_Munk",
 }
 
+_HISTORY_TIMESTAMP_RE = re.compile(
+    r"(?P<date>(?:\d{4}/\d{2}/\d{2}|\d{2}/\d{2}/\d{4}))\s+"
+    r"(?P<time>\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s*"
+    r"\(GMT\s*(?P<offset>[+-](?:\d+(?:\.\d+)?|\d{1,2}:\d{2}))\)"
+)
+
 
 def _get_timestamp_from(params):
     # get the acquisition timestamp
@@ -251,20 +258,84 @@ def _get_timestamp_from(params):
     acqtime = params.tim
     gmt_offset_hour = float(acqtime.split("GMT")[1].split(")")[0])
     if len(acqdate.split("/")[0]) == 2:
-        date_time = datetime.strptime(
-            acqdate + "_" + acqtime.split()[0],
-            "%d/%m/%Y_%H:%M:%S.%f",
-        )
+        formats = ("%d/%m/%Y_%H:%M:%S.%f", "%d/%m/%Y_%H:%M:%S")
     elif len(acqdate.split("/")[0]) == 4:
-        date_time = datetime.strptime(
-            acqdate + "_" + acqtime.split()[0],
-            "%Y/%m/%d_%H:%M:%S",
-        )
+        formats = ("%Y/%m/%d_%H:%M:%S.%f", "%Y/%m/%d_%H:%M:%S")
     else:  # pragma: no cover
         raise ValueError("acqdate can not be interpreted.")
+
+    date_time = None
+    raw_dt = acqdate + "_" + acqtime.split()[0]
+    for fmt in formats:
+        try:
+            date_time = datetime.strptime(raw_dt, fmt)
+            break
+        except ValueError:
+            continue
+    if date_time is None:
+        raise ValueError("acqtime can not be interpreted.")
+
     utc_dt = date_time - timedelta(hours=gmt_offset_hour)
     utc_dt = utc_dt.replace(tzinfo=UTC)
     return utc_dt, utc_dt.timestamp()
+
+
+def _parse_gmt_offset_hours(offset_text):
+    if ":" in offset_text:
+        sign = -1 if offset_text.startswith("-") else 1
+        hour_text, minute_text = offset_text[1:].split(":", 1)
+        return sign * (int(hour_text) + int(minute_text) / 60.0)
+    return float(offset_text)
+
+
+def _parse_opus_datetime(date_text, time_text):
+    dt_text = f"{date_text} {time_text}"
+    formats = (
+        "%Y/%m/%d %H:%M:%S.%f",
+        "%Y/%m/%d %H:%M:%S",
+        "%d/%m/%Y %H:%M:%S.%f",
+        "%d/%m/%Y %H:%M:%S",
+    )
+    for fmt in formats:
+        try:
+            return datetime.strptime(dt_text, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _get_first_history_timestamp(opus_history):
+    if not opus_history:
+        return None, None
+
+    timestamps_utc = []
+    for match in _HISTORY_TIMESTAMP_RE.finditer(opus_history):
+        local_dt = _parse_opus_datetime(match.group("date"), match.group("time"))
+        if local_dt is None:
+            continue
+        offset_hours = _parse_gmt_offset_hours(match.group("offset"))
+        utc_dt = (local_dt - timedelta(hours=offset_hours)).replace(tzinfo=UTC)
+        timestamps_utc.append(utc_dt)
+
+    if not timestamps_utc:
+        return None, None
+
+    first_dt = min(timestamps_utc)
+    return first_dt, first_dt.timestamp()
+
+
+def _get_first_modified_timestamp(opus_data, fallback_params):
+    first_dt, first_timestamp = _get_first_history_timestamp(
+        getattr(opus_data, "history", None)
+    )
+    if first_timestamp is not None:
+        return first_dt, first_timestamp, "history"
+
+    try:
+        fallback_dt, fallback_timestamp = _get_timestamp_from(fallback_params)
+        return fallback_dt, fallback_timestamp, "acquisition"
+    except Exception:
+        return None, None, "missing"
 
 
 def _load_parameters_into_meta(opus_data):
@@ -377,6 +448,14 @@ def _read_opus(*args, **kwargs):
     # add other parameters in metadata
     dataset.meta = _load_parameters_into_meta(opus_data)
     dataset.meta.name = "OPUS Parameters"
+    first_dt, first_timestamp, first_source = _get_first_modified_timestamp(
+        opus_data, d.params
+    )
+    dataset.meta["first_modified_timestamp"] = first_timestamp
+    dataset.meta["first_modified_datetime_utc"] = (
+        first_dt.isoformat() if first_dt is not None else None
+    )
+    dataset.meta["first_modified_source"] = first_source
 
     # add info about other type present in th file and which could be alternatively read.
     dataset.meta["other_data_types"] = possible_type_parameters
