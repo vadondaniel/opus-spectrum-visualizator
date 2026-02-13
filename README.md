@@ -111,6 +111,10 @@ The executable will appear in the `/dist/` folder as `main.exe`
 
 (Optional) Using [Inno Setup](https://jrsoftware.org/isdl.php):
 
+> If you build with PyInstaller, install `pytz` first:
+>
+> `python -m pip install pytz`
+
 1. Run `pyinstaller main.spec`.
 2. Open `installer.iss` in Inno Setup.
 3. Compile (Ctrl+F9).
