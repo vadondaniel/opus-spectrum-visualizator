@@ -36,7 +36,7 @@ from utils.export_csv import (
 )
 
 
-APP_VERSION = "1.5.3"
+APP_VERSION = "1.5.4"
 LATEST_RELEASE_API = "https://api.github.com/repos/vadondaniel/opus-spectrum-visualizator/releases/latest"
 LATEST_RELEASE_PAGE = "https://github.com/vadondaniel/opus-spectrum-visualizator/releases/latest"
 UPDATE_STATE_FILE = Path.home() / ".opus_visualizer_state.json"
