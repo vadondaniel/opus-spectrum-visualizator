@@ -104,6 +104,9 @@ def process_spectrum_data(folder_path, progress_callback=None, max_workers=4):
                 "wavenumbers": wavenumbers,
                 "absorbance": absorbance,
             }
+        except Exception:
+            # Ignore non-OPUS or unreadable files so mixed folders can still be processed.
+            return None
         finally:
             completed += 1
             if progress_callback:

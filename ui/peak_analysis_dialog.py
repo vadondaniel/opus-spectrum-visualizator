@@ -15,6 +15,7 @@ class PeakAnalysisDialog(QDialog):
     def __init__(self, combined_list, wavelength_ranges,
                  display_type="both", smoothing="gaussian",
                  smoothing_param=5.0, baseline_method="trapezoid",
+                 x_axis_key="temperature", x_axis_label="Temperature (K)",
                  parent=None):
         super().__init__(parent)
         self.setWindowTitle("Peak Analysis")
@@ -34,6 +35,8 @@ class PeakAnalysisDialog(QDialog):
         self.smoothing_method = smoothing
         self.smoothing_param = smoothing_param
         self.baseline_method = (baseline_method or "trapezoid").lower()
+        self.x_axis_key = x_axis_key
+        self.x_axis_label = x_axis_label
 
         # --- Matplotlib figure ---
         self.fig, self.ax = plt.subplots(figsize=(10, 6))
@@ -117,11 +120,11 @@ class PeakAnalysisDialog(QDialog):
         self.smoothing_method = method
 
         if method == "gaussian":
-            self.smoothing_param_label.setText("Bandwidth (K):")
+            self.smoothing_param_label.setText("Bandwidth:")
             self.smoothing_param_spin.setRange(0.01, 1e5)
             self.smoothing_param_spin.setValue(5.0)
             self.smoothing_param_spin.setSingleStep(0.1)
-            self.smoothing_param_spin.setToolTip("Set the level of smoothing (bandwidth in K)")
+            self.smoothing_param_spin.setToolTip("Set the level of smoothing")
         elif method == "loess":
             self.smoothing_param_label.setText("Frac (0–1):")
             self.smoothing_param_spin.setRange(0.01, 1.0)
@@ -135,7 +138,7 @@ class PeakAnalysisDialog(QDialog):
             self.smoothing_param_spin.setSingleStep(0.01)
             self.smoothing_param_spin.setToolTip("Set the level of smoothing (strength 0-1)")
         elif method == "boxcar":
-            self.smoothing_param_label.setText("Window (K):")
+            self.smoothing_param_label.setText("Window:")
             self.smoothing_param_spin.setRange(0.01, 1e5)
             self.smoothing_param_spin.setValue(5.0)
             self.smoothing_param_spin.setSingleStep(0.5)
@@ -163,6 +166,8 @@ class PeakAnalysisDialog(QDialog):
             smoothing=self.smoothing_method,
             smoothing_param=self.smoothing_param,
             baseline_correction_mode=self.baseline_method,
+            x_axis_key=self.x_axis_key,
+            x_axis_label=self.x_axis_label,
             eval_on_grid=True,
             grid_points=300,
             ax=self.ax

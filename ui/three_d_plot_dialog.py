@@ -13,6 +13,7 @@ from utils.plot import plot_3d
 class ThreeDPlotDialog(QDialog):
     def __init__(self, combined_data, plot_type, cmap,
                  smoothing_factor=None,
+                 axis_label="Temperature (K)",
                  baseline_enabled=False,
                  baseline_min=None,
                  baseline_max=None,
@@ -30,6 +31,7 @@ class ThreeDPlotDialog(QDialog):
         self.plot_type = plot_type
         self.cmap = cmap
         self.smoothing_factor = smoothing_factor
+        self.axis_label = axis_label
 
         # Baseline correction state
         self.baseline_enabled = bool(baseline_enabled)
@@ -37,7 +39,7 @@ class ThreeDPlotDialog(QDialog):
         self.baseline_max = baseline_max
 
         self.wavenumbers = np.array(combined_data[0]["wavenumbers"])
-        self.temperatures = np.array([e["temperature"] for e in combined_data])
+        self.axis_values = np.array([e["temperature"] for e in combined_data])
 
         main_layout = QVBoxLayout(self)
 
@@ -95,12 +97,12 @@ class ThreeDPlotDialog(QDialog):
         main_layout.addWidget(wn_group)
         update_wn_inputs()
 
-        # --- Temperature range group ---
-        t_group = QGroupBox("Temperature range (K)")
+        # --- Axis range group ---
+        t_group = QGroupBox(f"{self.axis_label} range")
         t_layout = QHBoxLayout()
 
-        self.t_slider = QRangeSlider(float(self.temperatures.min()),
-                                     float(self.temperatures.max()))
+        self.t_slider = QRangeSlider(float(self.axis_values.min()),
+                                     float(self.axis_values.max()))
 
         self.t_min_input = QLineEdit()
         self.t_max_input = QLineEdit()
@@ -292,7 +294,8 @@ class ThreeDPlotDialog(QDialog):
         tmp_html = plot_3d(filtered_data,
                            self.plot_type,
                            self.cmap,
-                           smoothing_factor=smoothing_val)
+                           smoothing_factor=smoothing_val,
+                           y_axis_label=self.axis_label)
         self.view.setUrl(QUrl.fromLocalFile(os.path.abspath(tmp_html)))
 
     # --- helpers ---

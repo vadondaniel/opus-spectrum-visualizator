@@ -5,10 +5,10 @@ from PyQt6.QtWidgets import (
 
 
 class InfoDialog(QDialog):
-    def __init__(self, title, text, parent=None):
+    def __init__(self, title, text, parent=None, min_width=500, min_height=350):
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.setMinimumSize(500, 350)
+        self.setMinimumSize(min_width, min_height)
         self.setWindowFlags(self.windowFlags() |
                             Qt.WindowType.WindowCloseButtonHint)
 

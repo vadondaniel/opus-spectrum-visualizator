@@ -25,7 +25,11 @@ from ui.three_d_plot_dialog import ThreeDPlotDialog
 from ui.peak_analysis_dialog import PeakAnalysisDialog
 from data_processing.spectrum import process_spectrum_data
 from data_processing.temperature import process_temperature_data
-from data_processing.combined_data import combine_temperature_and_spectrum_data
+from data_processing.custom_variable import process_custom_variable_data
+from data_processing.combined_data import (
+    combine_temperature_and_spectrum_data,
+    combine_custom_variable_and_spectrum_data,
+)
 from utils.processing_thread import ProcessingThread
 from utils.smoothing import estimate_bandwidth
 from utils.export_csv import (
@@ -58,10 +62,16 @@ class MainWindow(QMainWindow):
         """Initialize application state."""
         self.spectrum_list = []
         self.temperature_list_filtered = []
+        self.axis_data = None
         self.combined_list = []
 
         self.spectrum_path = None
-        self.temp_file = None
+        self.axis_file = None
+        self.axis_source_mode = "temperature"
+        self.primary_axis_label = "Temperature (K)"
+        self.primary_axis_unit = "K"
+        self._spectrum_done = False
+        self._axis_done = False
         self.peak_baseline_method = "trapezoid"
         self._update_notice_shown = False
         self._update_thread_started = False
@@ -69,7 +79,7 @@ class MainWindow(QMainWindow):
 
     def _setup_window(self):
         """Basic window properties."""
-        self.setWindowTitle("Spectrum & Temperature Data Processor")
+        self.setWindowTitle("Spectrum & Axis Data Processor")
         self.setGeometry(150, 150, 720, 460)
 
     # ------------------------
@@ -164,21 +174,22 @@ class MainWindow(QMainWindow):
         spec_layout.addWidget(self.convert_btn)
         spec_layout.addWidget(self.spectrum_btn)
 
-        # Temperature row
-        temp_layout = QHBoxLayout()
-        self.temp_label = QLabel("No file selected")
-        self.temp_label.setStyleSheet("color: gray;")
-        self.temp_btn = QPushButton("Browse")
-        self.temp_btn.setFixedWidth(100)
-        self.temp_btn.setToolTip("Select the temperature data file")
-        self.temp_btn.clicked.connect(self.select_temp_file)
-        temp_layout.addWidget(QLabel("Temperature:"))
-        temp_layout.addWidget(self.temp_label)
-        temp_layout.addStretch()
-        temp_layout.addWidget(self.temp_btn)
+        # Axis data row (temperature or custom variable in a single input)
+        axis_layout = QHBoxLayout()
+        self.axis_label = QLabel("No file selected")
+        self.axis_label.setStyleSheet("color: gray;")
+        self.axis_btn = QPushButton("Browse")
+        self.axis_btn.setFixedWidth(100)
+        self.axis_btn.setToolTip(
+            "Select input file (temperature format or custom variable format).")
+        self.axis_btn.clicked.connect(self.select_axis_file)
+        axis_layout.addWidget(QLabel("Variable:"))
+        axis_layout.addWidget(self.axis_label)
+        axis_layout.addStretch()
+        axis_layout.addWidget(self.axis_btn)
 
         layout.addLayout(spec_layout)
-        layout.addLayout(temp_layout)
+        layout.addLayout(axis_layout)
         group.setLayout(layout)
         return group
 
@@ -195,7 +206,7 @@ class MainWindow(QMainWindow):
         self.process_btn = QPushButton("Start Processing")
         self.process_btn.setFixedWidth(140)
         self.process_btn.setToolTip(
-            "Start processing spectrum and temperature data")
+            "Start processing spectrum and selected axis data")
         self.process_btn.clicked.connect(self.start_processing)
         self.process_btn.setEnabled(False)
         layout.addWidget(self.process_btn,
@@ -204,7 +215,7 @@ class MainWindow(QMainWindow):
         # Progress rows
         spec_row, self.spec_progress = self._create_progress_row("Spectrum:")
         temp_row, self.temp_progress = self._create_progress_row(
-            "Temperature:")
+            "Axis Data:")
         comb_row, self.combine_progress = self._create_progress_row("Combine:")
         layout.addLayout(spec_row)
         layout.addLayout(temp_row)
@@ -446,20 +457,50 @@ class MainWindow(QMainWindow):
     # ------------------------
     # Info Windows
     # ------------------------
-    def show_info(self, title, text):
-        self.info_win = InfoDialog(title, text)
+    def show_info(self, title, text, min_width=500, min_height=350):
+        self.info_win = InfoDialog(
+            title, text, min_width=min_width, min_height=min_height)
         self.info_win.show()
 
     def show_howto(self):
         self.show_info("How To Use", """
             <h2>How To Use</h2>
             <ol>
-                <li>Select a <b>folder</b> containing <b>OPUS files</b> and a <b>Temperature file</b>.</li>
-                <li>Click <b>Start Processing</b> — Spectrum and Temperature will run in parallel, then Combine.</li>
+                <li>Select a <b>folder</b> containing <b>OPUS files</b> and one <b>Input file</b> (temperature or custom variable).</li>
+                <li>Click <b>Start Processing</b> — Spectrum and axis data will run in parallel, then Combine.</li>
+                <li><b>Peak Analysis X axis is automatic</b> from the selected input file (no separate X-axis selector needed).</li>
                 <li>Use <b>Visualization</b> to plot 3D (Surface or Scatter, choose colormap, optional smoothing).</li>
                 <li>Use <b>Range Comparison</b> to enter ranges (e.g. <code>950-1050, 3050-3150</code>) and compare absorption.</li>
             </ol>
-        """)
+            <h3>Custom Input File Format</h3>
+            <p>The app auto-detects custom files. For filename matching, use exactly 2 columns: one numeric value column and one filename column.</p>
+            <ul>
+                <li><b>Filename match (recommended):</b> columns like <code>fluence</code> and <code>filename</code>.  
+                    Example row: <code>1.330E+12, 20260205.3</code></li>
+                <li><b>Timestamp match:</b> columns like <code>timestamp</code> and <code>value</code>.  
+                    Values are interpolated to spectrum timestamps.</li>
+                <li><b>Sequence fallback:</b> only one numeric value column, with exactly one row per spectrum file (in acquisition order).</li>
+            </ul>
+            <p><b>Small examples:</b></p>
+            <p><b>Filename match (2 columns):</b></p>
+            <pre>fluence,filename
+0,20260205.1
+1.330E+12,20260205.3
+3.906E+12,20260205.5</pre>
+            <p><b>Timestamp match:</b></p>
+            <pre>timestamp\ttemperature
+1738660001\t298.15
+1738660031\t298.50
+1738660061\t300.40</pre>
+            <p><b>Sequence fallback (value only):</b></p>
+            <pre>laser_power
+0.50
+0.75
+1.00</pre>
+            <p>Both plain numbers and scientific notation (for example <code>1.33E+12</code>) are accepted.</p>
+            <p>Separators can be comma, tab, or semicolon.</p>
+            <p>The app only uses the file you selected.</p>
+        """, min_width=780, min_height=580)
 
     def show_credits(self):
         self.show_info("Credits", f"""
@@ -485,17 +526,16 @@ class MainWindow(QMainWindow):
             self.spectrum_label.setText(f"{folder}")
         self._update_start_enabled()
 
-    def select_temp_file(self):
+    def select_axis_file(self):
         file, _ = QFileDialog.getOpenFileName(
-            self, "Select Temperature File", "", "CSV/TXT Files (*.csv *.txt);;All Files (*)")
+            self, "Select Input File", "", "CSV/TXT Files (*.csv *.txt);;All Files (*)")
         if file:
-            self.temp_file = file
-            self.temp_label.setText(f"{file}")
+            self.axis_file = file
+            self.axis_label.setText(f"{file}")
         self._update_start_enabled()
 
     def _update_start_enabled(self):
-        self.process_btn.setEnabled(
-            bool(self.spectrum_path and self.temp_file))
+        self.process_btn.setEnabled(bool(self.spectrum_path and self.axis_file))
         # Enable Convert when a spectrum folder is selected
         self.convert_btn.setEnabled(bool(self.spectrum_path))
 
@@ -509,10 +549,45 @@ class MainWindow(QMainWindow):
             input_folder=self.spectrum_path, parent=self)
         self.convert_dialog.show()
 
+    def _process_axis_data_auto(self, file_path, progress_callback=None):
+        """
+        Auto-detect input file type:
+        1) temperature format (legacy),
+        2) custom variable format.
+        """
+        try:
+            temperature_data = process_temperature_data(
+                file_path, progress_callback=progress_callback)
+            if temperature_data:
+                timestamps = np.array(
+                    [entry.get("timestamp", np.nan) for entry in temperature_data], dtype=float)
+                # Basic sanity check for Unix-like timestamps; otherwise treat as custom.
+                if not np.all(np.isfinite(timestamps)) or float(np.nanmax(timestamps)) < 1e8:
+                    raise ValueError("Input does not look like temperature timestamp data.")
+            return {
+                "mode": "temperature",
+                "payload": temperature_data,
+                "axis_label": "Temperature (K)",
+                "axis_unit": "K",
+            }
+        except Exception:
+            custom_data = process_custom_variable_data(
+                file_path, progress_callback=progress_callback)
+            variable_name = str(custom_data.get("variable_name") or "Custom Variable").strip()
+            return {
+                "mode": "custom",
+                "payload": custom_data,
+                "axis_label": variable_name or "Custom Variable",
+                "axis_unit": "X",
+            }
+
     def start_processing(self):
         self.spectrum_list = []
         self.temperature_list_filtered = []
+        self.axis_data = None
         self.combined_list = []
+        self._spectrum_done = False
+        self._axis_done = False
 
         # Reset progress bars
         self.spec_progress.setValue(0)
@@ -528,6 +603,14 @@ class MainWindow(QMainWindow):
         self.peak_btn.setEnabled(False)
         self.peak_export_btn.setEnabled(False)
 
+        if not self.axis_file:
+            QMessageBox.warning(
+                self, "Start Processing",
+                "Please select an input file."
+            )
+            self._update_start_enabled()
+            return
+
         # Spectrum
         self.spectrum_thread = ProcessingThread(
             process_spectrum_data, self.spectrum_path)
@@ -537,41 +620,74 @@ class MainWindow(QMainWindow):
         self.spectrum_thread.error.connect(self._on_error)
         self.spectrum_thread.start()
 
-        # Temperature
-        self.temperature_thread = ProcessingThread(
-            process_temperature_data, self.temp_file)
-        self.temperature_thread.progress_update.connect(
+        self.axis_thread = ProcessingThread(self._process_axis_data_auto, self.axis_file)
+        self.axis_thread.progress_update.connect(
             self.temp_progress.setValue)
-        self.temperature_thread.result_ready.connect(self._on_temperature_done)
-        self.temperature_thread.error.connect(self._on_error)
-        self.temperature_thread.start()
+        self.axis_thread.result_ready.connect(self._on_axis_data_done)
+        self.axis_thread.error.connect(self._on_error)
+        self.axis_thread.start()
 
     def _on_error(self, message: str):
         QMessageBox.critical(self, "Processing error", message)
+        self._update_start_enabled()
 
     def _on_spectrum_done(self, result):
         self.spectrum_list = result
+        self._spectrum_done = True
         self.spec_progress.setValue(100)
         if self.spectrum_list:
             self.export_csv_btn.setEnabled(True)
             self.plot_spectra_btn.setEnabled(True)
         self._combine_data()
 
-    def _on_temperature_done(self, result):
-        self.temperature_list_filtered = result
+    def _on_axis_data_done(self, result):
+        mode = "temperature"
+        payload = result
+        axis_label = "Temperature (K)"
+        axis_unit = "K"
+
+        if isinstance(result, dict) and "mode" in result and "payload" in result:
+            mode = str(result.get("mode") or "temperature").strip().lower()
+            payload = result.get("payload")
+            axis_label = str(result.get("axis_label") or axis_label).strip()
+            axis_unit = str(result.get("axis_unit") or axis_unit).strip()
+
+        self.axis_source_mode = mode
+        self.axis_data = payload
+        self.temperature_list_filtered = payload if self.axis_source_mode == "temperature" else []
+        self._axis_done = True
         self.temp_progress.setValue(100)
+
+        if self.axis_source_mode == "custom":
+            self.primary_axis_label = axis_label or "Custom Variable"
+            self.primary_axis_unit = axis_unit or "X"
+        else:
+            self.primary_axis_label = axis_label or "Temperature (K)"
+            self.primary_axis_unit = axis_unit or "K"
+        # Refresh smoothing parameter unit label for peak analysis controls.
+        if hasattr(self, "smoothing_method_dropdown"):
+            self._update_smoothing_param_ui(
+                self.smoothing_method_dropdown.currentText())
+
         self._combine_data()
 
     def _combine_data(self):
-        if not self.spectrum_list or not self.temperature_list_filtered:
+        if not (self._spectrum_done and self._axis_done):
             return
 
         try:
-            self.combined_list = combine_temperature_and_spectrum_data(
-                self.temperature_list_filtered,
-                self.spectrum_list,
-                time_buffer=10
-            ) or []
+            if self.axis_source_mode == "custom":
+                self.combined_list = combine_custom_variable_and_spectrum_data(
+                    self.axis_data,
+                    self.spectrum_list,
+                    time_buffer=10
+                ) or []
+            else:
+                self.combined_list = combine_temperature_and_spectrum_data(
+                    self.temperature_list_filtered,
+                    self.spectrum_list,
+                    time_buffer=10
+                ) or []
             self.combine_progress.setValue(100)
         except Exception as e:
             QMessageBox.critical(self, "Combine error", str(e))
@@ -664,10 +780,11 @@ class MainWindow(QMainWindow):
         method = method.lower()
 
         if method == "gaussian":
-            self.smoothing_param_label.setText("Bandwidth (K):")
+            self.smoothing_param_label.setText("Bandwidth:")
             self.smoothing_param_spin.setRange(0.01, 1e5)
-            self.smoothing_param_spin.setValue(estimate_bandwidth([e["temperature"] for e in self.get_filtered_combined_list()])
-                                               if self.get_filtered_combined_list() else 5.0)
+            source_values = [e["temperature"]
+                             for e in self.get_filtered_combined_list()]
+            self.smoothing_param_spin.setValue(estimate_bandwidth(source_values) if source_values else 5.0)
             self.smoothing_param_spin.setToolTip("Set the level of smoothing")
 
         elif method == "loess":
@@ -686,7 +803,7 @@ class MainWindow(QMainWindow):
             self.smoothing_param_spin.setValue(0.2)
 
         elif method == "boxcar":
-            self.smoothing_param_label.setText("Window (K):")
+            self.smoothing_param_label.setText("Window:")
             self.smoothing_param_spin.setRange(0.01, 1e5)
             self.smoothing_param_spin.setSingleStep(0.5)
             self.smoothing_param_spin.setToolTip(
@@ -764,6 +881,7 @@ class MainWindow(QMainWindow):
             plot_type,
             cmap,
             smoothing_factor,
+            axis_label=self.primary_axis_label,
             baseline_enabled=bl_enabled,
             baseline_min=bl_min,
             baseline_max=bl_max,
@@ -772,9 +890,12 @@ class MainWindow(QMainWindow):
         self.three_d_dialog.show()
 
     def _plot_absorption(self):
-        if not self.get_filtered_combined_list():
-            QMessageBox.warning(self, "Peak Analysis",
-                                "No combined data to plot.")
+        peak_combined_list = self.get_filtered_combined_list()
+        x_key = "temperature"
+        x_label = self.primary_axis_label
+
+        if not peak_combined_list:
+            QMessageBox.warning(self, "Peak Analysis", "No combined data to plot.")
             return
 
         s = self.wavelength_range_input.text().strip()
@@ -803,12 +924,14 @@ class MainWindow(QMainWindow):
         # PeakAnalysisDialog requires a float even if raw data is shown; dialog ignores it in that case.
 
         self.peak_dialog = PeakAnalysisDialog(
-            combined_list=self.get_filtered_combined_list(),
+            combined_list=peak_combined_list,
             wavelength_ranges=ranges,
             display_type=display_type,
             smoothing=smoothing_method,
             smoothing_param=smoothing_param,
             baseline_method=self.peak_baseline_method,
+            x_axis_key=x_key,
+            x_axis_label=x_label,
             parent=self
         )
         self.peak_dialog.baseline_changed.connect(self._on_peak_baseline_changed)
@@ -845,7 +968,11 @@ class MainWindow(QMainWindow):
             return
 
         filepath = export_combined_data_csv(
-            self.get_filtered_combined_list(), parent=self, format="matrix")
+            self.get_filtered_combined_list(),
+            parent=self,
+            format="matrix",
+            x_label=self.primary_axis_label
+        )
 
         msg = QMessageBox(self)
         msg.setWindowTitle("Export Result")
@@ -860,9 +987,12 @@ class MainWindow(QMainWindow):
         msg.exec()
 
     def _on_export_peak_csv_clicked(self):
-        if not self.get_filtered_combined_list():
-            QMessageBox.warning(self, "Peak Analysis Export",
-                                "No combined data to export.")
+        peak_combined_list = self.get_filtered_combined_list()
+        x_key = "temperature"
+        x_label = self.primary_axis_label
+
+        if not peak_combined_list:
+            QMessageBox.warning(self, "Peak Analysis Export", "No combined data to export.")
             return
 
         s = self.wavelength_range_input.text().strip()
@@ -886,10 +1016,12 @@ class MainWindow(QMainWindow):
             return
 
         filepath = export_peak_analysis_csv(
-            self.get_filtered_combined_list(),
+            peak_combined_list,
             ranges,
             parent=self,
-            baseline_mode=self.peak_baseline_method
+            baseline_mode=self.peak_baseline_method,
+            x_key=x_key,
+            x_label=x_label
         )
 
         msg = QMessageBox(self)

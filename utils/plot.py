@@ -150,6 +150,7 @@ def plot_3d(
     cmap="plasma",
     max_points=2_000_000,
     smoothing_factor: int | None = None,
+    y_axis_label: str = "Temperature (K)",
 ):
     if not combined_data or not isinstance(combined_data, list) or not isinstance(combined_data[0], dict):
         raise ValueError("Data format invalid.")
@@ -217,7 +218,7 @@ def plot_3d(
         ])
         fig.update_layout(
             xaxis_title="Wavenumber (cm⁻¹)",
-            yaxis_title="Temperature (K)"
+            yaxis_title=y_axis_label
         )
     elif plot_type == "Heatmap":
         fig = go.Figure(data=[
@@ -230,7 +231,7 @@ def plot_3d(
         ])
         fig.update_layout(
             xaxis_title="Wavenumber (cm⁻¹)",
-            yaxis_title="Temperature (K)"
+            yaxis_title=y_axis_label
         )
     else:
         raise ValueError(f"Unsupported plot type: {plot_type}")
@@ -243,7 +244,7 @@ def plot_3d(
     fig.update_layout(
         scene=dict(
             xaxis_title="Wavenumber (cm⁻¹)",
-            yaxis_title="Temperature (K)",
+            yaxis_title=y_axis_label,
             zaxis_title="Absorbance"
         ),
         autosize=True
@@ -264,28 +265,30 @@ def plot_peak_analysis(
     smoothing_param=None,
     window_size=5,
     baseline_correction_mode="none",
+    x_axis_key="temperature",
+    x_axis_label="Temperature (K)",
     eval_on_grid=True,
     grid_points=300,
     ax=None
 ):
     """
-    Compute and optionally plot summed absorbance vs temperature.
-    Returns (temperatures, dict of {range: summed_absorbance}).
+    Compute and optionally plot summed absorbance vs selected x-axis.
+    Returns (x_values, dict of {range: summed_absorbance}).
     If ax is provided, plots on the given matplotlib Axes; otherwise creates new figure.
     """
     if not combined_list:
         return None, None
 
-    temps_sorted, results = compute_peak_areas(
-        combined_list, wavelength_ranges, baseline_mode=baseline_correction_mode)
-    if temps_sorted is None:
+    x_sorted, results = compute_peak_areas(
+        combined_list, wavelength_ranges, baseline_mode=baseline_correction_mode, x_key=x_axis_key)
+    if x_sorted is None:
         return None, None
 
     T_grid = None
     if eval_on_grid:
         try:
-            T_grid = np.linspace(temps_sorted.min(),
-                                 temps_sorted.max(),
+            T_grid = np.linspace(x_sorted.min(),
+                                 x_sorted.max(),
                                  grid_points)
         except ValueError:
             T_grid = None
@@ -305,7 +308,7 @@ def plot_peak_analysis(
         areas = results[(start_w, end_w)]
 
         # --- smoothing ---
-        x_eval = T_grid if T_grid is not None else temps_sorted
+        x_eval = T_grid if T_grid is not None else x_sorted
         smoothed = None
         param = smoothing_param if smoothing_param is not None else (
             window_size if smoothing in ("boxcar", "gaussian") else 0.3)
@@ -315,31 +318,31 @@ def plot_peak_analysis(
                 width = float(param)
                 smoothed = np.array([
                     np.mean(areas[np.abs(
-                        temps_sorted - T0) <= width / 2])
+                        x_sorted - T0) <= width / 2])
                     for T0 in x_eval
                 ])
             elif smoothing == "gaussian":
                 _, smoothed = gaussian_kernel_smooth(
-                    temps_sorted, areas, float(param), x_eval=x_eval)
+                    x_sorted, areas, float(param), x_eval=x_eval)
             elif smoothing == "loess":
                 _, smoothed = loess_1d(
-                    temps_sorted, areas, frac=float(param), x_eval=x_eval)
+                    x_sorted, areas, frac=float(param), x_eval=x_eval)
             elif smoothing == "spline":
                 smoothed = spline_safe_normalized(
-                    temps_sorted, areas, x_eval, float(param))
+                    x_sorted, areas, x_eval, float(param))
 
         label = f"{start_w}-{end_w}"
 
         # --- plotting ---
         if display_type in ("raw", "both"):
-            ax.plot(temps_sorted, areas, marker=marker,
+            ax.plot(x_sorted, areas, marker=marker,
                     linestyle='-', color=color, label=label)
         if smoothed is not None and x_eval is not None:
             smoothed_label = label if display_type == "smoothed" else None
             ax.plot(x_eval, smoothed, linestyle='--', linewidth=2,
                     color=color, label=smoothed_label)
 
-    ax.set_xlabel("Temperature (K)")
+    ax.set_xlabel(x_axis_label)
     ax.set_ylabel("Peak Area")
     if len(wavelength_ranges) == 1:
         title = "Peak Analysis"
@@ -353,7 +356,7 @@ def plot_peak_analysis(
     ax.grid(True)
     ax.legend()
     fig.tight_layout()
-    return temps_sorted, results
+    return x_sorted, results
 
 
 # baseline correction is now unified in utils/peak_analysis.py

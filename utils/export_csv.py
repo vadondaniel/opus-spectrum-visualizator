@@ -59,7 +59,8 @@ def export_spectra_csv(
 def export_combined_data_csv(
     combined_list,
     parent: Optional[QWidget] = None,
-    format: str = "long"
+    format: str = "long",
+    x_label: str = "Temperature (K)"
 ):
     """
     Export combined_data (list of dicts with 'temperature', 'wavenumbers', 'absorbance') as CSV.
@@ -73,6 +74,8 @@ def export_combined_data_csv(
     format : str, default "long"
         "long"   -> columns: Temperature, Wavenumber, Absorbance
         "matrix" -> rows: Temperature, columns: Wavenumbers, values: Absorbance
+    x_label : str, default "Temperature (K)"
+        Label for the primary axis column/index.
     """
     if not combined_list:
         raise ValueError("No combined data to export.")
@@ -101,7 +104,7 @@ def export_combined_data_csv(
         # Flatten for CSV
         T, W = np.meshgrid(temperatures, wavenumbers, indexing="ij")
         df = pd.DataFrame({
-            "Temperature": T.flatten(),
+            x_label: T.flatten(),
             "Wavenumber": W.flatten(),
             "Absorbance": absorbances.flatten()
         })
@@ -109,7 +112,7 @@ def export_combined_data_csv(
     elif format == "matrix":
         # Rows = temperatures, columns = wavenumbers
         df = pd.DataFrame(absorbances, index=temperatures, columns=wavenumbers)
-        df.index.name = ""
+        df.index.name = x_label
 
     else:
         raise ValueError("Invalid format. Choose 'long' or 'matrix'.")
@@ -123,7 +126,9 @@ def export_peak_analysis_csv(
     combined_list,
     wavelength_ranges,
     parent: Optional[QWidget] = None,
-    baseline_mode: str = "trapezoid"
+    baseline_mode: str = "trapezoid",
+    x_key: str = "temperature",
+    x_label: Optional[str] = None
 ):
     """
     Export peak analysis to a CSV file chosen via file dialog.
@@ -150,19 +155,33 @@ def export_peak_analysis_csv(
         return None
 
     # Compute unified peak areas (trapezoid baseline correction + width-weighted integration)
-    temperatures_sorted, results = compute_peak_areas(
-        combined_list, wavelength_ranges, baseline_mode=baseline_mode)
+    x_sorted, results = compute_peak_areas(
+        combined_list, wavelength_ranges, baseline_mode=baseline_mode, x_key=x_key)
+    if x_sorted is None:
+        raise ValueError(f"No valid values found for x-axis key: {x_key!r}")
 
-    # Sort timestamps the same way as temperatures
-    timestamps = np.array([e.get("timestamp", np.nan) for e in combined_list])
-    temperatures = np.array([e["temperature"] for e in combined_list], dtype=float)
-    sort_idx = np.argsort(temperatures)
-    timestamps_sorted = timestamps[sort_idx].astype(np.int64)
+    x_label_final = x_label or ("Temperature (K)" if x_key == "temperature" else x_key)
+
+    # Sort timestamps and temperatures in the same order as x_sorted
+    x_values_all = np.array([e.get(x_key, np.nan) for e in combined_list], dtype=float)
+    valid_mask = np.isfinite(x_values_all)
+    valid_indices = np.where(valid_mask)[0]
+    x_sort_local = np.argsort(x_values_all[valid_mask])
+    sorted_indices = valid_indices[x_sort_local]
+
+    timestamps = np.array([e.get("timestamp", np.nan) for e in combined_list], dtype=float)
+    temperatures = np.array([e.get("temperature", np.nan) for e in combined_list], dtype=float)
+    timestamps_sorted = timestamps[sorted_indices]
+    if np.all(np.isfinite(timestamps_sorted)):
+        timestamps_sorted = np.rint(timestamps_sorted).astype(np.int64)
+    temperatures_sorted = temperatures[sorted_indices]
 
     data = {
         "Timestamp": timestamps_sorted,
-        "Temperature (K)": temperatures_sorted
+        x_label_final: x_sorted
     }
+    if x_key != "temperature":
+        data["Temperature (K)"] = temperatures_sorted
 
     for (start_wavelength, end_wavelength) in wavelength_ranges:
         data[f"{start_wavelength}-{end_wavelength} cm^-1"] = results[(start_wavelength, end_wavelength)]

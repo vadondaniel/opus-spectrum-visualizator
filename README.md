@@ -32,7 +32,41 @@ Start the program from the **Desktop Icon**, **Start Menu** or search for *Opus 
 ## 📚 Usage Guide
 
 1. Select the folder containing OPUS files.
-2. Select the `.txt` file containing temperature data.
+2. Select one input file (`.txt`/`.csv`) for axis data:
+
+   - Temperature file (legacy format), or
+   - Custom variable file.
+
+   Custom variable file options:
+
+   - Filename matching (recommended): one numeric value column + one filename column  
+     (example row: `1.330E+12, 20260205.3`)
+     separators can be comma, tab, or semicolon.
+     both plain numbers and scientific notation are accepted.
+     The app uses only the selected input file.
+   - Timestamp matching: one timestamp column + one numeric value column
+   - Sequence fallback: one numeric value column with exactly one row per spectrum (acquisition order)
+
+   Small examples:
+
+   filename match (2 columns):
+   `fluence,filename`
+   `0.000E+0,20260205.1`
+   `1.330E+12,20260205.3`
+   `3.906E+12,20260205.5`
+
+   timestamp match:
+   `timestamp;temperature`
+   `1738660001;298.15`
+   `1738660031;298.50`
+   `1738660061;300.40`
+
+   sequence fallback (value only):
+   `laser_power`
+   `0.50`
+   `0.75`
+   `1.00`
+
 3. Start the processing.
 4. (Optional) Set absorbance range filter to filter out extremes or undesired intervals.
 5. Inspect or export processed spectra.

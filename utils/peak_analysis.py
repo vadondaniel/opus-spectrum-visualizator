@@ -48,25 +48,31 @@ def integrate_area_variable_dx(wavenumbers, corrected_absorbance):
     return float(np.sum(widths * y[1:]))
 
 
-def compute_peak_areas(combined_list, wavelength_ranges, baseline_mode="none"):
+def compute_peak_areas(combined_list, wavelength_ranges, baseline_mode="none", x_key="temperature"):
     """
     For each (start, end) range, compute peak areas per entry in combined_list using
     trapezoid baseline correction (if requested) and width-weighted integration.
 
-    Returns temperatures_sorted, results dict mapping (start, end) -> np.ndarray
-    of areas sorted by ascending temperature.
+    Returns x_sorted, results dict mapping (start, end) -> np.ndarray
+    of areas sorted by ascending x_key values.
     """
     if not combined_list:
         return None, {}
 
-    temperatures = np.array([e["temperature"] for e in combined_list], dtype=float)
-    sort_idx = np.argsort(temperatures)
-    temperatures_sorted = temperatures[sort_idx]
+    x_values_all = np.array([e.get(x_key, np.nan) for e in combined_list], dtype=float)
+    valid_mask = np.isfinite(x_values_all)
+    if not np.any(valid_mask):
+        return None, {}
+
+    valid_entries = [e for e, ok in zip(combined_list, valid_mask) if ok]
+    x_values = x_values_all[valid_mask]
+    sort_idx = np.argsort(x_values)
+    x_sorted = x_values[sort_idx]
 
     results = {}
     for (start_w, end_w) in wavelength_ranges:
         areas = []
-        for e in combined_list:
+        for e in valid_entries:
             wn = np.asarray(e["wavenumbers"], dtype=float)
             ab = np.asarray(e["absorbance"], dtype=float)
             mask = (wn >= start_w) & (wn <= end_w)
@@ -80,5 +86,4 @@ def compute_peak_areas(combined_list, wavelength_ranges, baseline_mode="none"):
             areas.append(area)
         results[(start_w, end_w)] = np.array(areas, dtype=float)[sort_idx]
 
-    return temperatures_sorted, results
-
+    return x_sorted, results
