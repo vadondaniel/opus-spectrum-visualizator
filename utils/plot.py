@@ -309,21 +309,30 @@ def plot_peak_analysis(
 
         # --- smoothing ---
         x_eval = T_grid if T_grid is not None else x_sorted
+        x_min = float(x_sorted.min())
+        x_span = float(max(x_sorted.max() - x_min, 1e-12))
+        x_norm = (x_sorted - x_min) / x_span
+        x_eval_norm = (x_eval - x_min) / x_span
         smoothed = None
         param = smoothing_param if smoothing_param is not None else (
             window_size if smoothing in ("boxcar", "gaussian") else 0.3)
 
         if display_type in ("smoothed", "both") and smoothing != "none":
             if smoothing == "boxcar":
-                width = float(param)
-                smoothed = np.array([
-                    np.mean(areas[np.abs(
-                        x_sorted - T0) <= width / 2])
-                    for T0 in x_eval
-                ])
+                width = max(float(param), 1e-12)
+                values = []
+                for x0 in x_eval_norm:
+                    mask = np.abs(x_norm - x0) <= width / 2
+                    if np.any(mask):
+                        values.append(float(np.mean(areas[mask])))
+                    else:
+                        nearest_idx = int(np.argmin(np.abs(x_norm - x0)))
+                        values.append(float(areas[nearest_idx]))
+                smoothed = np.asarray(values, dtype=float)
             elif smoothing == "gaussian":
+                bandwidth = max(float(param), 1e-12)
                 _, smoothed = gaussian_kernel_smooth(
-                    x_sorted, areas, float(param), x_eval=x_eval)
+                    x_norm, areas, bandwidth, x_eval=x_eval_norm)
             elif smoothing == "loess":
                 _, smoothed = loess_1d(
                     x_sorted, areas, frac=float(param), x_eval=x_eval)

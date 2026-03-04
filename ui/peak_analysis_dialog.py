@@ -121,10 +121,11 @@ class PeakAnalysisDialog(QDialog):
 
         if method == "gaussian":
             self.smoothing_param_label.setText("Bandwidth:")
-            self.smoothing_param_spin.setRange(0.01, 1e5)
-            self.smoothing_param_spin.setValue(5.0)
-            self.smoothing_param_spin.setSingleStep(0.1)
-            self.smoothing_param_spin.setToolTip("Set the level of smoothing")
+            self.smoothing_param_spin.setRange(0.005, 1.0)
+            self.smoothing_param_spin.setValue(0.08)
+            self.smoothing_param_spin.setSingleStep(0.005)
+            self.smoothing_param_spin.setToolTip(
+                "Set the smoothing bandwidth as a fraction of total x-span (0-1)")
         elif method == "loess":
             self.smoothing_param_label.setText("Frac (0–1):")
             self.smoothing_param_spin.setRange(0.01, 1.0)
@@ -139,10 +140,11 @@ class PeakAnalysisDialog(QDialog):
             self.smoothing_param_spin.setToolTip("Set the level of smoothing (strength 0-1)")
         elif method == "boxcar":
             self.smoothing_param_label.setText("Window:")
-            self.smoothing_param_spin.setRange(0.01, 1e5)
-            self.smoothing_param_spin.setValue(5.0)
-            self.smoothing_param_spin.setSingleStep(0.5)
-            self.smoothing_param_spin.setToolTip("Set the window size for moving average")
+            self.smoothing_param_spin.setRange(0.005, 1.0)
+            self.smoothing_param_spin.setValue(0.15)
+            self.smoothing_param_spin.setSingleStep(0.01)
+            self.smoothing_param_spin.setToolTip(
+                "Set the moving-average window as a fraction of total x-span (0-1)")
 
         self._plot()
 

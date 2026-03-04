@@ -31,7 +31,6 @@ from data_processing.combined_data import (
     combine_custom_variable_and_spectrum_data,
 )
 from utils.processing_thread import ProcessingThread
-from utils.smoothing import estimate_bandwidth
 from utils.export_csv import (
     export_peak_analysis_csv, export_combined_data_csv, export_spectra_csv
 )
@@ -781,11 +780,11 @@ class MainWindow(QMainWindow):
 
         if method == "gaussian":
             self.smoothing_param_label.setText("Bandwidth:")
-            self.smoothing_param_spin.setRange(0.01, 1e5)
-            source_values = [e["temperature"]
-                             for e in self.get_filtered_combined_list()]
-            self.smoothing_param_spin.setValue(estimate_bandwidth(source_values) if source_values else 5.0)
-            self.smoothing_param_spin.setToolTip("Set the level of smoothing")
+            self.smoothing_param_spin.setRange(0.005, 1.0)
+            self.smoothing_param_spin.setSingleStep(0.005)
+            self.smoothing_param_spin.setValue(0.08)
+            self.smoothing_param_spin.setToolTip(
+                "Set the smoothing bandwidth as a fraction of total x-span (0-1)")
 
         elif method == "loess":
             self.smoothing_param_label.setText("Frac (0–1):")
@@ -804,11 +803,11 @@ class MainWindow(QMainWindow):
 
         elif method == "boxcar":
             self.smoothing_param_label.setText("Window:")
-            self.smoothing_param_spin.setRange(0.01, 1e5)
-            self.smoothing_param_spin.setSingleStep(0.5)
+            self.smoothing_param_spin.setRange(0.005, 1.0)
+            self.smoothing_param_spin.setSingleStep(0.01)
             self.smoothing_param_spin.setToolTip(
-                "Set the range the moving average should use for smoothing")
-            self.smoothing_param_spin.setValue(5.0)
+                "Set the moving-average window as a fraction of total x-span (0-1)")
+            self.smoothing_param_spin.setValue(0.15)
 
     def _on_display_changed(self, display_text: str):
         """If user chooses 'Raw' hide smoothing param since it won't be applied."""
